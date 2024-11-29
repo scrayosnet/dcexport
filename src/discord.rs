@@ -4,7 +4,11 @@ use crate::metrics::{
 };
 use crate::{metrics, settings};
 use axum::async_trait;
-use serenity::all::{parse_emoji, ChannelId, Context, EventHandler, GatewayIntents, Guild, GuildChannel, GuildId, Member, Message, PartialGuild, Presence, Reaction, ReactionType, UnavailableGuild, User, UserId, VoiceState};
+use serenity::all::{
+    parse_emoji, ChannelId, Context, EventHandler, GatewayIntents, Guild, GuildChannel, GuildId,
+    Member, Message, PartialGuild, Presence, Reaction, ReactionType, UnavailableGuild, User,
+    UserId, VoiceState,
+};
 use serenity::Client;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -15,7 +19,6 @@ use tracing::{info, instrument};
 
 #[derive(Clone, Debug)]
 pub struct CachedUser {
-    user_id: UserId,
     presence: Presence,
 }
 
@@ -121,7 +124,6 @@ impl EventHandler for Handler {
             self.users.write().await.insert(
                 (guild.id, *user_id),
                 CachedUser {
-                    user_id: *user_id,
                     presence: presence.clone(),
                 },
             );
@@ -268,7 +270,9 @@ impl EventHandler for Handler {
         };
         info!(guild_id = guild_id.get(), "Reaction add");
 
-        let ReactionType::Custom { name, id, .. } = add_reaction.emoji else { return; };
+        let ReactionType::Custom { name, id, .. } = add_reaction.emoji else {
+            return;
+        };
         self.metrics_handler
             .emote_reacted
             .get_or_create(&EmoteReactedLabels {
@@ -337,10 +341,7 @@ impl EventHandler for Handler {
         // Update cached state
         self.users.write().await.insert(
             (guild_id, new_data.user.id),
-            CachedUser {
-                user_id: new_data.user.id,
-                presence: new_data,
-            },
+            CachedUser { presence: new_data },
         );
     }
 
