@@ -1,17 +1,28 @@
 [package]
 name = "dcexport"
+description = "Discord Guild Prometheus Exporter"
 version = "0.1.0"
+authors = [
+    "Paul Wagner <github@paulwagner.dev>"
+]
+license = "MIT"
+repository = "https://github.com/scrayosnet/dcexport"
+readme = "README.md"
+documentation = "https://github.com/scrayosnet/dcexport"
+homepage = "https://github.com/scrayosnet/dcexport"
+keywords = ["discord", "prometheus", "monitoring", "exporter"]
+categories = ["development-tools", "command-line-utilities"]
 edition = "2021"
+rust-version = "1.75.0"
 
 [dependencies]
-prometheus-client = { version = "0.22.3" }
-serenity = { version = "0.12.4" }
-thiserror = { version = "2.0.3" }
-tokio = { version = "1.41.1", features = ["macros", "rt-multi-thread", "signal"] }
-tracing-subscriber = { version = "0.3.18" }
+prometheus-client = { version = "0.22" }
+serenity = { version = "0.12" }
+tokio = { version = "1.41", features = ["macros", "rt-multi-thread", "signal"] }
+tokio-util = { version = "0.7", features = ["rt"] }
 axum = { version = "0.7", default-features = false, features = ["http1", "tokio", "tower-log", "tracing", "query"] }
 axum-auth = { version = "0.7", features = ["auth-basic"] }
-serde = { version = "1.0.215", features = ["derive"] }
-config = "0.14.1"
-tracing = "0.1.40"
-tokio-util = { version = "0.7.12", features = ["rt"] }
+config = { version = "0.14", default-features = false, features = ["toml", "convert-case"] }
+serde = { version = "1.0", features = ["derive"] }
+tracing = { version = "0.1" }
+tracing-subscriber = { version = "0.3" }
