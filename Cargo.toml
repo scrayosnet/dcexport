@@ -1,0 +1,17 @@
+[package]
+name = "dcexport"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+prometheus-client = { version = "0.22.3" }
+serenity = { version = "0.12.4" }
+thiserror = { version = "2.0.3" }
+tokio = { version = "1.41.1", features = ["macros", "rt-multi-thread", "signal"] }
+tracing-subscriber = { version = "0.3.18" }
+axum = { version = "0.7", default-features = false, features = ["http1", "tokio", "tower-log", "tracing", "query"] }
+axum-auth = { version = "0.7", features = ["auth-basic"] }
+serde = { version = "1.0.215", features = ["derive"] }
+config = "0.14.1"
+tracing = "0.1.40"
+tokio-util = { version = "0.7.12", features = ["rt"] }
