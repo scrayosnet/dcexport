@@ -1,0 +1,8 @@
+[logging]
+level = "info"
+
+[metrics]
+prefix = "dcexport"
+username = "user"
+password = "unsecure"
+address = "0.0.0.0:8080"
