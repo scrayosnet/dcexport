@@ -243,6 +243,11 @@ impl EventHandler for Handler {
         };
         info!(guild_id = guild_id.get(), "Message");
 
+        if msg.author.bot || msg.author.system {
+            // Only tracks user messages
+            return;
+        }
+
         let Ok((category, channel)) = self.category_channel(&ctx, &msg.channel_id).await else {
             warn!(guild_id=guild_id.get(), channel_id=msg.channel_id.get(), "failed to get category and channel, this might cause inconsistencies in the metrics!");
             return;
@@ -289,14 +294,21 @@ impl EventHandler for Handler {
         };
         info!(guild_id = guild_id.get(), "Reaction add");
 
-        let Ok((category, channel)) = self.category_channel(&ctx, &add_reaction.channel_id).await
-        else {
-            warn!(guild_id=guild_id.get(), channel_id=add_reaction.channel_id.get(), "failed to get category and channel, this might cause inconsistencies in the metrics!");
-            return;
-        };
+        if let Some(member) = &add_reaction.member {
+            if member.user.bot || member.user.system {
+                // Only tracks user messages
+                return;
+            }
+        }
 
         let ReactionType::Custom { name, id, .. } = add_reaction.emoji else {
             // Only tracks custom emojis
+            return;
+        };
+
+        let Ok((category, channel)) = self.category_channel(&ctx, &add_reaction.channel_id).await
+        else {
+            warn!(guild_id=guild_id.get(), channel_id=add_reaction.channel_id.get(), "failed to get category and channel, this might cause inconsistencies in the metrics!");
             return;
         };
 
