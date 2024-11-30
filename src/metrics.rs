@@ -1,11 +1,9 @@
-use crate::settings;
 use axum::body::Body;
 use axum::http::header::CONTENT_TYPE;
 use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
+use axum::response::Response;
 use axum::routing::get;
 use axum::{Extension, Router};
-use axum_auth::AuthBasic;
 use prometheus_client::encoding::text::encode;
 use prometheus_client::encoding::{EncodeLabelSet, EncodeLabelValue, LabelValueEncoder};
 use prometheus_client::metrics::counter::Counter;
@@ -14,7 +12,14 @@ use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::registry::Registry;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
+use tower_http::trace::TraceLayer;
 use tracing::instrument;
+
+/// The prefix ued to all application metrics.
+const PREFIX: &str = "dcexport";
+
+/// The address (port) of the application metrics.
+const ADDRESS: &str = "0.0.0.0:8080";
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub(crate) struct Boolean(bool);
@@ -117,7 +122,6 @@ pub(crate) struct BoostLabels {
 }
 
 pub(crate) struct Handler {
-    config: settings::Metrics,
     pub(crate) registry: Registry,
     pub(crate) guilds: Family<GuildsLabels, Gauge>,
     pub(crate) message_sent: Family<MessageSentLabels, Counter>,
@@ -131,8 +135,8 @@ pub(crate) struct Handler {
 }
 
 impl Handler {
-    pub(crate) fn new(config: settings::Metrics) -> Self {
-        let mut registry = <Registry>::with_prefix(&config.prefix);
+    pub(crate) fn new() -> Self {
+        let mut registry = <Registry>::with_prefix(PREFIX);
 
         let guilds = Family::<GuildsLabels, Gauge>::default();
         registry.register(
@@ -198,7 +202,6 @@ impl Handler {
         );
 
         Self {
-            config,
             registry,
             // metrics
             guilds,
@@ -223,10 +226,11 @@ pub(crate) async fn serve(
     let rest_app = Router::new()
         .route("/metrics", get(metrics))
         .layer(Extension(Arc::clone(&handler)))
+        .layer(TraceLayer::new_for_http())
         .with_state(());
 
     // Bind tcp listener
-    let listener = tokio::net::TcpListener::bind(&handler.config.address).await?;
+    let listener = tokio::net::TcpListener::bind(ADDRESS).await?;
 
     // Serve webserver and wait
     axum::serve(listener, rest_app)
@@ -236,17 +240,7 @@ pub(crate) async fn serve(
     Ok(())
 }
 
-async fn metrics(auth: Option<AuthBasic>, Extension(handler): Extension<Arc<Handler>>) -> Response {
-    // Check basic auth
-    if let Some(AuthBasic((username, password))) = auth {
-        if username != handler.config.username || password != Some(handler.config.password.clone())
-        {
-            return (StatusCode::UNAUTHORIZED, "invalid auth").into_response();
-        }
-    } else {
-        return (StatusCode::UNAUTHORIZED, "missing basic auth").into_response();
-    }
-
+async fn metrics(Extension(handler): Extension<Arc<Handler>>) -> Response {
     // Encode the metrics content into the buffer
     let mut buffer = String::new();
     encode(&mut buffer, &handler.registry).expect("failed to encode metrics into the buffer");

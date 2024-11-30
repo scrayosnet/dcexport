@@ -98,4 +98,4 @@ target/
 build/
 
 # custom config
-/config/config.toml
+.env

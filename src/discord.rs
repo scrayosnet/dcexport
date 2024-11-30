@@ -1,8 +1,8 @@
+use crate::metrics;
 use crate::metrics::{
     ActivityLabels, BoostLabels, EmoteReactedLabels, EmoteSentLabels, GuildsLabels,
     MemberStatusLabels, MemberVoiceLabels, MembersLabels, MessageSentLabels,
 };
-use crate::{metrics, settings};
 use axum::async_trait;
 use serenity::all::{
     parse_emoji, ChannelId, Context, EventHandler, GatewayIntents, Guild, GuildChannel, GuildId,
@@ -17,21 +17,21 @@ use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, instrument};
 
+/// [CachedUser] is a bundle of information that should be cached. This cache is complementary to the
+/// build-in serenity cache. It contains information required to decrement the prometheus gauges.
 #[derive(Clone, Debug)]
 pub struct CachedUser {
     presence: Presence,
 }
 
 pub struct Handler {
-    config: settings::Discord,
     metrics_handler: Arc<metrics::Handler>,
     users: RwLock<HashMap<(GuildId, UserId), CachedUser>>,
 }
 
 impl Handler {
-    pub fn new(config: settings::Discord, metrics_handler: Arc<metrics::Handler>) -> Self {
+    pub fn new(metrics_handler: Arc<metrics::Handler>) -> Self {
         Self {
-            config,
             metrics_handler,
             users: RwLock::new(HashMap::new()),
         }
@@ -397,6 +397,7 @@ impl EventHandler for Handler {
 
 #[instrument(skip(handler, shutdown))]
 pub(crate) async fn serve(
+    discord_token: &str,
     handler: Handler,
     shutdown: CancellationToken,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -404,7 +405,7 @@ pub(crate) async fn serve(
     let intents = GatewayIntents::all();
 
     // Create a new instance of the Client, logging in as a bot
-    let mut client = Client::builder(&handler.config.token, intents)
+    let mut client = Client::builder(discord_token, intents)
         .event_handler(handler)
         .await?;
 
