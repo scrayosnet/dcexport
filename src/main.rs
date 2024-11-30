@@ -14,8 +14,13 @@ use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::Layer;
 
 /// The default logging level.
-const LOGGING_LEVEL: &str = "info";
+///
+/// The string has to be deserializable using [LevelFilter::from_str]. In general, the info logging
+/// level should be ideal for staging and production environments. As such, the corresponding env
+/// variable should generally be left empty.
+const DEFAULT_LOGGING_LEVEL: &str = "info";
 
+/// The public response error wrapper for all errors that can be relayed to the caller.
 #[derive(thiserror::Error, Debug)]
 enum Error {
     #[error("missing discord token")]
@@ -33,7 +38,8 @@ enum Error {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Read configuration from the environment variables
     let discord_token = env::var("DCEXPORT_DISCORD_TOKEN").map_err(Error::MissingDiscordToken)?;
-    let logging_level = env::var("DCEXPORT_LOGGING_LEVEL").unwrap_or(LOGGING_LEVEL.to_string());
+    let logging_level =
+        env::var("DCEXPORT_LOGGING_LEVEL").unwrap_or(DEFAULT_LOGGING_LEVEL.to_string());
 
     // Initialize logging with sentry hook
     tracing_subscriber::registry()

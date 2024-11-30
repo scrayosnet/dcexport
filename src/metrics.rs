@@ -13,7 +13,7 @@ use prometheus_client::registry::Registry;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tower_http::trace::TraceLayer;
-use tracing::instrument;
+use tracing::{debug, instrument, trace};
 
 /// The prefix ued to all application metrics.
 const PREFIX: &str = "dcexport";
@@ -21,6 +21,10 @@ const PREFIX: &str = "dcexport";
 /// The address (port) of the application metrics.
 const ADDRESS: &str = "0.0.0.0:8080";
 
+/// [Boolean] is a wrapper for [bool] that implements [EncodeLabelValue] such that it can be used in
+/// metrics labels.
+///
+/// It encodes [true] as "true" and [false] as "false".
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub(crate) struct Boolean(bool);
 
@@ -45,15 +49,13 @@ impl EncodeLabelValue for Boolean {
     }
 }
 
-// TODO only track custom emojis
-// TODO don't track emoji guild id
-// TODO don't differ between user, system and bot
-
+/// [GuildsLabels] are the [labels](EncodeLabelSet) for the "guild_total" metric.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub(crate) struct GuildsLabels {
     pub(crate) guild_id: u64,
 }
 
+/// [MessageSentLabels] are the [labels](EncodeLabelSet) for the "message_sent_total" metric.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub(crate) struct MessageSentLabels {
     pub(crate) guild_id: u64,
@@ -63,6 +65,7 @@ pub(crate) struct MessageSentLabels {
     pub(crate) channel_name: String,
 }
 
+/// [EmoteSentLabels] are the [labels](EncodeLabelSet) for the "emote_sent_total" metric.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub(crate) struct EmoteSentLabels {
     pub(crate) guild_id: u64,
@@ -74,6 +77,7 @@ pub(crate) struct EmoteSentLabels {
     pub(crate) emoji_name: Option<String>,
 }
 
+/// [EmoteReactedLabels] are the [labels](EncodeLabelSet) for the "emote_reacted_total" metric.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub(crate) struct EmoteReactedLabels {
     pub(crate) guild_id: u64,
@@ -85,6 +89,7 @@ pub(crate) struct EmoteReactedLabels {
     pub(crate) emoji_name: Option<String>,
 }
 
+/// [ActivityLabels] are the [labels](EncodeLabelSet) for the "activity_total" metric.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub(crate) struct ActivityLabels {
     pub(crate) guild_id: u64,
@@ -92,17 +97,20 @@ pub(crate) struct ActivityLabels {
     pub(crate) activity_name: String,
 }
 
+/// [MemberLabels] are the [labels](EncodeLabelSet) for the "member_total" metric.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
-pub(crate) struct MembersLabels {
+pub(crate) struct MemberLabels {
     pub(crate) guild_id: u64,
 }
 
+/// [MemberStatusLabels] are the [labels](EncodeLabelSet) for the "member_status_total" metric.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub(crate) struct MemberStatusLabels {
     pub(crate) guild_id: u64,
     pub(crate) status: String,
 }
 
+/// [MemberVoiceLabels] are the [labels](EncodeLabelSet) for the "member_voice_total" metric.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub(crate) struct MemberVoiceLabels {
     pub(crate) guild_id: u64,
@@ -116,16 +124,18 @@ pub(crate) struct MemberVoiceLabels {
     pub(crate) self_mute: Boolean,
 }
 
+/// [BoostLabels] are the [labels](EncodeLabelSet) for the "boost_total" metric.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub(crate) struct BoostLabels {
     pub(crate) guild_id: u64,
 }
 
+/// Handler is the [servable](serve) bundle of metrics for the exporter.
 pub(crate) struct Handler {
-    pub(crate) registry: Registry,
+    registry: Registry,
     pub(crate) guilds: Family<GuildsLabels, Gauge>,
     pub(crate) message_sent: Family<MessageSentLabels, Counter>,
-    pub(crate) member: Family<MembersLabels, Gauge>,
+    pub(crate) member: Family<MemberLabels, Gauge>,
     pub(crate) emote_sent: Family<EmoteSentLabels, Counter>,
     pub(crate) emote_reacted: Family<EmoteReactedLabels, Counter>,
     pub(crate) activity: Family<ActivityLabels, Gauge>,
@@ -135,9 +145,15 @@ pub(crate) struct Handler {
 }
 
 impl Handler {
+    /// Creates a new [Handler] metrics bundle with its own [Registry].
+    ///
+    /// The [Registry] is created using a [PREFIX].
+    #[instrument]
     pub(crate) fn new() -> Self {
+        debug!(prefix = PREFIX, "Building metrics registry");
         let mut registry = <Registry>::with_prefix(PREFIX);
 
+        debug!(metrics_name = "guilds_total", "Building metric");
         let guilds = Family::<GuildsLabels, Gauge>::default();
         registry.register(
             "guilds_total",
@@ -145,6 +161,7 @@ impl Handler {
             guilds.clone(),
         );
 
+        debug!(metrics_name = "message_sent_total", "Building metric");
         let message_sent = Family::<MessageSentLabels, Counter>::default();
         registry.register(
             "message_sent_total",
@@ -152,6 +169,7 @@ impl Handler {
             message_sent.clone(),
         );
 
+        debug!(metrics_name = "emote_sent_total", "Building metric");
         let emote_sent = Family::<EmoteSentLabels, Counter>::default();
         registry.register(
             "emote_sent_total",
@@ -159,6 +177,7 @@ impl Handler {
             emote_sent.clone(),
         );
 
+        debug!(metrics_name = "emote_reacted_total", "Building metric");
         let emote_reacted = Family::<EmoteReactedLabels, Counter>::default();
         registry.register(
             "emote_reacted_total",
@@ -166,6 +185,7 @@ impl Handler {
             emote_reacted.clone(),
         );
 
+        debug!(metrics_name = "activity_total", "Building metric");
         let activity = Family::<ActivityLabels, Gauge>::default();
         registry.register(
             "activity_total",
@@ -173,13 +193,15 @@ impl Handler {
             activity.clone(),
         );
 
-        let member = Family::<MembersLabels, Gauge>::default();
+        debug!(metrics_name = "member_total", "Building metric");
+        let member = Family::<MemberLabels, Gauge>::default();
         registry.register(
             "member_total",
             "The total number of members on the guild.",
             member.clone(),
         );
 
+        debug!(metrics_name = "member_status_total", "Building metric");
         let member_status = Family::<MemberStatusLabels, Gauge>::default();
         registry.register(
             "member_status_total",
@@ -187,6 +209,7 @@ impl Handler {
             member_status.clone(),
         );
 
+        debug!(metrics_name = "member_voice_total", "Building metric");
         let member_voice = Family::<MemberVoiceLabels, Gauge>::default();
         registry.register(
             "member_voice_total",
@@ -194,6 +217,7 @@ impl Handler {
             member_voice.clone(),
         );
 
+        debug!(metrics_name = "boost_total", "Building metric");
         let boost = Family::<BoostLabels, Gauge>::default();
         registry.register(
             "boost_total",
@@ -217,6 +241,10 @@ impl Handler {
     }
 }
 
+/// Serves a shared [Handler] using a [webserver](Router).
+///
+/// Use the [CancellationToken] to cancel and gracefully shutdown the [Handler].
+/// The metrics can be accessed using the `/metrics` path. It doesn't enforce any authentication.
 #[instrument(skip(handler, shutdown))]
 pub(crate) async fn serve(
     handler: Arc<Handler>,
@@ -230,9 +258,11 @@ pub(crate) async fn serve(
         .with_state(());
 
     // Bind tcp listener
+    debug!(address = ADDRESS, "Starting tcp listener");
     let listener = tokio::net::TcpListener::bind(ADDRESS).await?;
 
     // Serve webserver and wait
+    debug!("Serving axum router");
     axum::serve(listener, rest_app)
         .with_graceful_shutdown(shutdown.cancelled_owned())
         .await?;
@@ -240,10 +270,17 @@ pub(crate) async fn serve(
     Ok(())
 }
 
+/// The metrics endpoint handler. It encodes the current registry into the response body.
+///
+/// The body has the [CONTENT_TYPE] `application/openmetrics-text; version=1.0.0; charset=utf-8`.
+#[instrument(skip(handler))]
 async fn metrics(Extension(handler): Extension<Arc<Handler>>) -> Response {
+    debug!("Handling metrics request");
+
     // Encode the metrics content into the buffer
     let mut buffer = String::new();
     encode(&mut buffer, &handler.registry).expect("failed to encode metrics into the buffer");
+    trace!(buffer = buffer.to_string(), "Built metrics response");
 
     // Respond with encoded metrics
     Response::builder()
@@ -253,5 +290,5 @@ async fn metrics(Extension(handler): Extension<Arc<Handler>>) -> Response {
             "application/openmetrics-text; version=1.0.0; charset=utf-8",
         )
         .body(Body::from(buffer))
-        .expect("failed to build success target response")
+        .expect("failed to build response")
 }
