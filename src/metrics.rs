@@ -49,13 +49,13 @@ impl EncodeLabelValue for Boolean {
     }
 }
 
-/// [GuildsLabels] are the [labels](EncodeLabelSet) for the "guild_total" metric.
+/// [GuildsLabels] are the [labels](EncodeLabelSet) for the "guild" metric.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub(crate) struct GuildsLabels {
     pub(crate) guild_id: u64,
 }
 
-/// [MessageSentLabels] are the [labels](EncodeLabelSet) for the "message_sent_total" metric.
+/// [MessageSentLabels] are the [labels](EncodeLabelSet) for the "message_sent" metric.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub(crate) struct MessageSentLabels {
     pub(crate) guild_id: u64,
@@ -65,31 +65,20 @@ pub(crate) struct MessageSentLabels {
     pub(crate) channel_name: String,
 }
 
-/// [EmoteSentLabels] are the [labels](EncodeLabelSet) for the "emote_sent_total" metric.
+/// [EmoteUsedLabels] are the [labels](EncodeLabelSet) for the "emote_used" metric.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
-pub(crate) struct EmoteSentLabels {
+pub(crate) struct EmoteUsedLabels {
     pub(crate) guild_id: u64,
     pub(crate) category_id: Option<u64>,
     pub(crate) category_name: Option<String>,
     pub(crate) channel_id: u64,
     pub(crate) channel_name: String,
+    pub(crate) reaction: Boolean,
     pub(crate) emoji_id: u64,
     pub(crate) emoji_name: Option<String>,
 }
 
-/// [EmoteReactedLabels] are the [labels](EncodeLabelSet) for the "emote_reacted_total" metric.
-#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
-pub(crate) struct EmoteReactedLabels {
-    pub(crate) guild_id: u64,
-    pub(crate) category_id: Option<u64>,
-    pub(crate) category_name: Option<String>,
-    pub(crate) channel_id: u64,
-    pub(crate) channel_name: String,
-    pub(crate) emoji_id: u64,
-    pub(crate) emoji_name: Option<String>,
-}
-
-/// [ActivityLabels] are the [labels](EncodeLabelSet) for the "activity_total" metric.
+/// [ActivityLabels] are the [labels](EncodeLabelSet) for the "activity" metric.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub(crate) struct ActivityLabels {
     pub(crate) guild_id: u64,
@@ -97,20 +86,20 @@ pub(crate) struct ActivityLabels {
     pub(crate) activity_name: String,
 }
 
-/// [MemberLabels] are the [labels](EncodeLabelSet) for the "member_total" metric.
+/// [MemberLabels] are the [labels](EncodeLabelSet) for the "member" metric.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub(crate) struct MemberLabels {
     pub(crate) guild_id: u64,
 }
 
-/// [MemberStatusLabels] are the [labels](EncodeLabelSet) for the "member_status_total" metric.
+/// [MemberStatusLabels] are the [labels](EncodeLabelSet) for the "member_status" metric.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub(crate) struct MemberStatusLabels {
     pub(crate) guild_id: u64,
     pub(crate) status: String,
 }
 
-/// [MemberVoiceLabels] are the [labels](EncodeLabelSet) for the "member_voice_total" metric.
+/// [MemberVoiceLabels] are the [labels](EncodeLabelSet) for the "member_voice" metric.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub(crate) struct MemberVoiceLabels {
     pub(crate) guild_id: u64,
@@ -124,7 +113,7 @@ pub(crate) struct MemberVoiceLabels {
     pub(crate) self_mute: Boolean,
 }
 
-/// [BoostLabels] are the [labels](EncodeLabelSet) for the "boost_total" metric.
+/// [BoostLabels] are the [labels](EncodeLabelSet) for the "boost" metric.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub(crate) struct BoostLabels {
     pub(crate) guild_id: u64,
@@ -136,8 +125,7 @@ pub(crate) struct Handler {
     pub(crate) guilds: Family<GuildsLabels, Gauge>,
     pub(crate) message_sent: Family<MessageSentLabels, Counter>,
     pub(crate) member: Family<MemberLabels, Gauge>,
-    pub(crate) emote_sent: Family<EmoteSentLabels, Counter>,
-    pub(crate) emote_reacted: Family<EmoteReactedLabels, Counter>,
+    pub(crate) emote_used: Family<EmoteUsedLabels, Counter>,
     pub(crate) activity: Family<ActivityLabels, Gauge>,
     pub(crate) member_status: Family<MemberStatusLabels, Gauge>,
     pub(crate) member_voice: Family<MemberVoiceLabels, Gauge>,
@@ -153,74 +141,70 @@ impl Handler {
         debug!(prefix = PREFIX, "Building metrics registry");
         let mut registry = <Registry>::with_prefix(PREFIX);
 
-        debug!(metrics_name = "guilds_total", "Building metric");
+        debug!(metrics_name = "guilds", "Building metric");
         let guilds = Family::<GuildsLabels, Gauge>::default();
-        registry.register(
-            "guilds_total",
-            "The total number of guilds.",
-            guilds.clone(),
-        );
+        registry.register("guilds", "The total number of guilds.", guilds.clone());
 
-        debug!(metrics_name = "message_sent_total", "Building metric");
+        debug!(metrics_name = "message_sent", "Building metric");
         let message_sent = Family::<MessageSentLabels, Counter>::default();
         registry.register(
-            "message_sent_total",
+            "message_sent",
             "The total number of discord messages sent by users.",
             message_sent.clone(),
         );
 
-        debug!(metrics_name = "emote_sent_total", "Building metric");
-        let emote_sent = Family::<EmoteSentLabels, Counter>::default();
+        debug!(metrics_name = "emote_used", "Building metric");
+        let emote_used = Family::<EmoteUsedLabels, Counter>::default();
         registry.register(
-            "emote_sent_total",
+            "emote_used",
             "The total number of discord emotes sent by users in messages.",
-            emote_sent.clone(),
+            emote_used.clone(),
         );
 
-        debug!(metrics_name = "emote_reacted_total", "Building metric");
-        let emote_reacted = Family::<EmoteReactedLabels, Counter>::default();
+        debug!(metrics_name = "emote_used", "Building metric");
+        let emote_used = Family::<EmoteUsedLabels, Counter>::default();
         registry.register(
-            "emote_reacted_total",
+            "emote_used",
             "The total number of discord emotes reacted with by users in messages.",
-            emote_reacted.clone(),
+            emote_used.clone(),
         );
 
-        debug!(metrics_name = "activity_total", "Building metric");
+        debug!(metrics_name = "activity", "Building metric");
         let activity = Family::<ActivityLabels, Gauge>::default();
         registry.register(
-            "activity_total",
+            "activity",
             "The total number of current activities.",
             activity.clone(),
         );
 
-        debug!(metrics_name = "member_total", "Building metric");
+        debug!(metrics_name = "member", "Building metric");
         let member = Family::<MemberLabels, Gauge>::default();
         registry.register(
-            "member_total",
+            "member",
             "The total number of members on the guild.",
             member.clone(),
         );
 
-        debug!(metrics_name = "member_status_total", "Building metric");
+        debug!(metrics_name = "member_status", "Building metric");
         let member_status = Family::<MemberStatusLabels, Gauge>::default();
         registry.register(
-            "member_status_total",
+            "member_status",
             "The total number of members on the guild per status.",
             member_status.clone(),
         );
 
-        debug!(metrics_name = "member_voice_total", "Building metric");
+        debug!(metrics_name = "member_voice", "Building metric");
         let member_voice = Family::<MemberVoiceLabels, Gauge>::default();
         registry.register(
-            "member_voice_total",
+            "member_voice",
             "The total number of members in voice channels.",
             member_voice.clone(),
         );
 
-        debug!(metrics_name = "boost_total", "Building metric");
+        debug!(metrics_name = "boost", "Building metric");
         let boost = Family::<BoostLabels, Gauge>::default();
         registry.register(
-            "boost_total",
+            "boost",
             "The total number of boosts on the guild.",
             boost.clone(),
         );
@@ -230,8 +214,7 @@ impl Handler {
             // metrics
             guilds,
             message_sent,
-            emote_sent,
-            emote_reacted,
+            emote_used,
             activity,
             member,
             member_status,

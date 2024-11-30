@@ -1,7 +1,7 @@
 use crate::metrics;
 use crate::metrics::{
-    ActivityLabels, BoostLabels, EmoteReactedLabels, EmoteSentLabels, GuildsLabels, MemberLabels,
-    MemberStatusLabels, MemberVoiceLabels, MessageSentLabels,
+    ActivityLabels, BoostLabels, EmoteUsedLabels, GuildsLabels, MemberLabels, MemberStatusLabels,
+    MemberVoiceLabels, MessageSentLabels,
 };
 use axum::async_trait;
 use serenity::all::{
@@ -265,7 +265,7 @@ impl EventHandler for Handler {
             })
             .inc();
 
-        // Handle `emote_sent` metric
+        // Handle `emote_used` metric
         for part in msg.content.split_whitespace() {
             let Some(emoji) = parse_emoji(part) else {
                 // Only tracks custom emojis
@@ -273,13 +273,14 @@ impl EventHandler for Handler {
             };
 
             self.metrics_handler
-                .emote_sent
-                .get_or_create(&EmoteSentLabels {
+                .emote_used
+                .get_or_create(&EmoteUsedLabels {
                     guild_id: guild_id.into(),
                     category_id: category.as_ref().map(|ch| ch.id.into()),
                     category_name: category.as_ref().map(|ch| ch.name.clone()),
                     channel_id: channel.id.into(),
                     channel_name: channel.name.clone(),
+                    reaction: false.into(),
                     emoji_id: emoji.id.into(),
                     emoji_name: Some(emoji.name),
                 })
@@ -312,15 +313,16 @@ impl EventHandler for Handler {
             return;
         };
 
-        // Handle `emote_reacted` metric
+        // Handle `emote_used` metric
         self.metrics_handler
-            .emote_reacted
-            .get_or_create(&EmoteReactedLabels {
+            .emote_used
+            .get_or_create(&EmoteUsedLabels {
                 guild_id: guild_id.into(),
                 category_id: category.as_ref().map(|ch| ch.id.into()),
                 category_name: category.as_ref().map(|ch| ch.name.clone()),
                 channel_id: channel.id.into(),
                 channel_name: channel.name.clone(),
+                reaction: true.into(),
                 emoji_id: id.into(),
                 emoji_name: name,
             })
