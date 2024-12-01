@@ -157,14 +157,6 @@ impl Handler {
         let emote_used = Family::<EmoteUsedLabels, Counter>::default();
         registry.register(
             "emote_used",
-            "The total number of discord emotes sent by users in messages.",
-            emote_used.clone(),
-        );
-
-        debug!(metrics_name = "emote_used", "Building metric");
-        let emote_used = Family::<EmoteUsedLabels, Counter>::default();
-        registry.register(
-            "emote_used",
             "The total number of discord emotes reacted with by users in messages.",
             emote_used.clone(),
         );
