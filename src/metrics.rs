@@ -92,6 +92,16 @@ pub(crate) struct MemberLabels {
     pub(crate) guild_id: u64,
 }
 
+/// [BotLabels] are the [labels](EncodeLabelSet) for the "bot" metric.
+///
+/// This metric is not included in the member metric (using a label) as the user bot status has to
+/// be explicitly requested on guild creation. As such, they are separated to ensure that the member
+/// metric does not suffer from additional requests (that could potentially fail).
+#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
+pub(crate) struct BotLabels {
+    pub(crate) guild_id: u64,
+}
+
 /// [MemberStatusLabels] are the [labels](EncodeLabelSet) for the "member_status" metric.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub(crate) struct MemberStatusLabels {
@@ -122,9 +132,10 @@ pub(crate) struct BoostLabels {
 /// Handler is the [servable](serve) bundle of metrics for the exporter.
 pub(crate) struct Handler {
     registry: Registry,
-    pub(crate) guilds: Family<GuildsLabels, Gauge>,
+    pub(crate) guild: Family<GuildsLabels, Gauge>,
     pub(crate) message_sent: Family<MessageSentLabels, Counter>,
     pub(crate) member: Family<MemberLabels, Gauge>,
+    pub(crate) bot: Family<BotLabels, Gauge>,
     pub(crate) emote_used: Family<EmoteUsedLabels, Counter>,
     pub(crate) activity: Family<ActivityLabels, Gauge>,
     pub(crate) member_status: Family<MemberStatusLabels, Gauge>,
@@ -141,9 +152,13 @@ impl Handler {
         debug!(prefix = PREFIX, "Building metrics registry");
         let mut registry = <Registry>::with_prefix(PREFIX);
 
-        debug!(metrics_name = "guilds", "Building metric");
-        let guilds = Family::<GuildsLabels, Gauge>::default();
-        registry.register("guilds", "The total number of guilds.", guilds.clone());
+        debug!(metrics_name = "guild", "Building metric");
+        let guild = Family::<GuildsLabels, Gauge>::default();
+        registry.register(
+            "guild",
+            "The total number of guilds handled by the exporter.",
+            guild.clone(),
+        );
 
         debug!(metrics_name = "message_sent", "Building metric");
         let message_sent = Family::<MessageSentLabels, Counter>::default();
@@ -173,8 +188,16 @@ impl Handler {
         let member = Family::<MemberLabels, Gauge>::default();
         registry.register(
             "member",
-            "The total number of members on the guild.",
+            "The total number of members (including bots) on the guild.",
             member.clone(),
+        );
+
+        debug!(metrics_name = "bot", "Building metric");
+        let bot = Family::<BotLabels, Gauge>::default();
+        registry.register(
+            "bot",
+            "The total number of bot members on the guild.",
+            bot.clone(),
         );
 
         debug!(metrics_name = "member_status", "Building metric");
@@ -204,11 +227,12 @@ impl Handler {
         Self {
             registry,
             // metrics
-            guilds,
+            guild,
             message_sent,
             emote_used,
             activity,
             member,
+            bot,
             member_status,
             member_voice,
             boost,

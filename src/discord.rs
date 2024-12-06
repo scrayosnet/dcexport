@@ -1,7 +1,7 @@
 use crate::metrics;
 use crate::metrics::{
-    ActivityLabels, BoostLabels, EmoteUsedLabels, GuildsLabels, MemberLabels, MemberStatusLabels,
-    MemberVoiceLabels, MessageSentLabels,
+    ActivityLabels, BoostLabels, BotLabels, EmoteUsedLabels, GuildsLabels, MemberLabels,
+    MemberStatusLabels, MemberVoiceLabels, MessageSentLabels,
 };
 use axum::async_trait;
 use serenity::all::{
@@ -82,9 +82,9 @@ impl EventHandler for Handler {
     async fn guild_create(&self, ctx: Context, guild: Guild, _is_new: Option<bool>) {
         info!(guild_id = guild.id.get(), "Guild create");
 
-        // Handle `guilds` metric
+        // Handle `guild` metric
         self.metrics_handler
-            .guilds
+            .guild
             .get_or_create(&GuildsLabels {
                 guild_id: guild.id.into(),
             })
@@ -105,6 +105,31 @@ impl EventHandler for Handler {
                 guild_id: guild.id.into(),
             })
             .set(guild.member_count as i64);
+
+        // Handle `bot` metric
+        'bot: {
+            let mut after = None;
+            loop {
+                let Ok(members) = guild.members(&ctx.http, None, after).await else {
+                    warn!(guild_id = guild.id.get(), "Failed to count guild bots");
+                    // remove metric to indicate no bots counted
+                    self.metrics_handler.bot.remove(&BotLabels {
+                        guild_id: guild.id.into(),
+                    });
+                    break 'bot;
+                };
+                self.metrics_handler
+                    .bot
+                    .get_or_create(&BotLabels {
+                        guild_id: guild.id.into(),
+                    })
+                    .inc_by(members.iter().filter(|member| member.user.bot).count() as i64);
+                let Some(last) = members.last() else {
+                    break 'bot;
+                };
+                after = Some(last.user.id);
+            }
+        }
 
         for (user_id, presence) in &guild.presences {
             debug!(user_id = user_id.get(), "create presence");
@@ -173,10 +198,18 @@ impl EventHandler for Handler {
     ) {
         info!(guild_id = incomplete.id.get(), "Guild delete");
 
-        // Handle `guilds` metric
+        // Handle `guild` metric
         self.metrics_handler
-            .guilds
+            .guild
             .get_or_create(&GuildsLabels {
+                guild_id: incomplete.id.into(),
+            })
+            .set(0);
+
+        // Handle `bot` metric
+        self.metrics_handler
+            .bot
+            .get_or_create(&BotLabels {
                 guild_id: incomplete.id.into(),
             })
             .set(0);
@@ -196,6 +229,16 @@ impl EventHandler for Handler {
                 guild_id: new_member.guild_id.into(),
             })
             .inc();
+
+        // Handle `bot` metric
+        if new_member.user.bot {
+            self.metrics_handler
+                .bot
+                .get_or_create(&BotLabels {
+                    guild_id: new_member.guild_id.into(),
+                })
+                .inc();
+        }
     }
 
     async fn guild_member_removal(
@@ -218,6 +261,16 @@ impl EventHandler for Handler {
                 guild_id: guild_id.into(),
             })
             .inc();
+
+        // Handle `bot` metric
+        if user.bot {
+            self.metrics_handler
+                .bot
+                .get_or_create(&BotLabels {
+                    guild_id: guild_id.into(),
+                })
+                .dec();
+        }
     }
 
     async fn guild_update(
