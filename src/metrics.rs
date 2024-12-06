@@ -156,7 +156,7 @@ impl Handler {
         let guild = Family::<GuildsLabels, Gauge>::default();
         registry.register(
             "guild",
-            "The total number of guilds handled by the exporter.",
+            "The number of guilds handled by the exporter.",
             guild.clone(),
         );
 
@@ -164,7 +164,7 @@ impl Handler {
         let message_sent = Family::<MessageSentLabels, Counter>::default();
         registry.register(
             "message_sent",
-            "The total number of discord messages sent by users.",
+            "The total number of discord messages sent by guild members.",
             message_sent.clone(),
         );
 
@@ -172,7 +172,7 @@ impl Handler {
         let emote_used = Family::<EmoteUsedLabels, Counter>::default();
         registry.register(
             "emote_used",
-            "The total number of discord emotes reacted with by users in messages.",
+            "The total number of discord emotes reacted with by guild members in messages.",
             emote_used.clone(),
         );
 
@@ -180,7 +180,7 @@ impl Handler {
         let activity = Family::<ActivityLabels, Gauge>::default();
         registry.register(
             "activity",
-            "The total number of current activities.",
+            "The number of current activities.",
             activity.clone(),
         );
 
@@ -188,7 +188,7 @@ impl Handler {
         let member = Family::<MemberLabels, Gauge>::default();
         registry.register(
             "member",
-            "The total number of members (including bots) on the guild.",
+            "The number of members (including bots) on the guild.",
             member.clone(),
         );
 
@@ -196,7 +196,7 @@ impl Handler {
         let bot = Family::<BotLabels, Gauge>::default();
         registry.register(
             "bot",
-            "The total number of bot members on the guild.",
+            "The number of bot members on the guild.",
             bot.clone(),
         );
 
@@ -204,7 +204,7 @@ impl Handler {
         let member_status = Family::<MemberStatusLabels, Gauge>::default();
         registry.register(
             "member_status",
-            "The total number of members on the guild per status.",
+            "The number of members on the guild per status.",
             member_status.clone(),
         );
 
@@ -212,7 +212,7 @@ impl Handler {
         let member_voice = Family::<MemberVoiceLabels, Gauge>::default();
         registry.register(
             "member_voice",
-            "The total number of members in voice channels.",
+            "The number of members in voice channels.",
             member_voice.clone(),
         );
 
@@ -220,7 +220,7 @@ impl Handler {
         let boost = Family::<BoostLabels, Gauge>::default();
         registry.register(
             "boost",
-            "The total number of boosts on the guild.",
+            "The number of boosts active on the guild.",
             boost.clone(),
         );
 
