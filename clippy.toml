@@ -1,0 +1,3 @@
+# Incresase allowd line limit as the discord handler handles many metrics in blocks. Therefore, the methods might have
+# many lines but are still readable
+too-many-lines-threshold = 120

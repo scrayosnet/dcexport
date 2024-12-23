@@ -21,12 +21,12 @@ const PREFIX: &str = "dcexport";
 /// The address (port) of the application metrics.
 const ADDRESS: &str = "0.0.0.0:8080";
 
-/// [Boolean] is a wrapper for [bool] that implements [EncodeLabelValue] such that it can be used in
+/// [Boolean] is a wrapper for [bool] that implements [`EncodeLabelValue`] such that it can be used in
 /// metrics labels.
 ///
 /// It encodes [true] as "true" and [false] as "false".
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub(crate) struct Boolean(bool);
+pub struct Boolean(bool);
 
 impl From<Boolean> for bool {
     fn from(val: Boolean) -> Self {
@@ -42,105 +42,106 @@ impl From<bool> for Boolean {
 
 impl EncodeLabelValue for Boolean {
     fn encode(&self, encoder: &mut LabelValueEncoder) -> Result<(), std::fmt::Error> {
-        match self.0 {
-            true => "true".encode(encoder),
-            false => "false".encode(encoder),
+        if self.0 {
+            "true".encode(encoder)
+        } else {
+            "false".encode(encoder)
         }
     }
 }
 
-/// [GuildsLabels] are the [labels](EncodeLabelSet) for the "guild" metric.
+/// [`GuildsLabels`] are the [labels](EncodeLabelSet) for the `guild` metric.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
-pub(crate) struct GuildsLabels {
-    pub(crate) guild_id: u64,
+pub struct GuildsLabels {
+    pub guild_id: u64,
 }
 
-/// [MessageSentLabels] are the [labels](EncodeLabelSet) for the "message_sent" metric.
+/// [`BoostLabels`] are the [labels](EncodeLabelSet) for the `boost` metric.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
-pub(crate) struct MessageSentLabels {
-    pub(crate) guild_id: u64,
-    pub(crate) category_id: Option<u64>,
-    pub(crate) category_name: Option<String>,
-    pub(crate) channel_id: u64,
-    pub(crate) channel_name: String,
+pub struct BoostLabels {
+    pub guild_id: u64,
 }
 
-/// [EmoteUsedLabels] are the [labels](EncodeLabelSet) for the "emote_used" metric.
+/// [`MemberLabels`] are the [labels](EncodeLabelSet) for the `member` metric.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
-pub(crate) struct EmoteUsedLabels {
-    pub(crate) guild_id: u64,
-    pub(crate) category_id: Option<u64>,
-    pub(crate) category_name: Option<String>,
-    pub(crate) channel_id: u64,
-    pub(crate) channel_name: String,
-    pub(crate) reaction: Boolean,
-    pub(crate) emoji_id: u64,
-    pub(crate) emoji_name: Option<String>,
+pub struct MemberLabels {
+    pub guild_id: u64,
 }
 
-/// [ActivityLabels] are the [labels](EncodeLabelSet) for the "activity" metric.
-#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
-pub(crate) struct ActivityLabels {
-    pub(crate) guild_id: u64,
-    pub(crate) activity_application_id: Option<u64>,
-    pub(crate) activity_name: String,
-}
-
-/// [MemberLabels] are the [labels](EncodeLabelSet) for the "member" metric.
-#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
-pub(crate) struct MemberLabels {
-    pub(crate) guild_id: u64,
-}
-
-/// [BotLabels] are the [labels](EncodeLabelSet) for the "bot" metric.
+/// [`BotLabels`] are the [labels](EncodeLabelSet) for the `bot` metric.
 ///
 /// This metric is not included in the member metric (using a label) as the user bot status has to
 /// be explicitly requested on guild creation. As such, they are separated to ensure that the member
 /// metric does not suffer from additional requests (that could potentially fail).
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
-pub(crate) struct BotLabels {
-    pub(crate) guild_id: u64,
+pub struct BotLabels {
+    pub guild_id: u64,
 }
 
-/// [MemberStatusLabels] are the [labels](EncodeLabelSet) for the "member_status" metric.
+/// [`MemberStatusLabels`] are the [labels](EncodeLabelSet) for the `member_status` metric.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
-pub(crate) struct MemberStatusLabels {
-    pub(crate) guild_id: u64,
-    pub(crate) status: String,
+pub struct MemberStatusLabels {
+    pub guild_id: u64,
+    pub status: String,
 }
 
-/// [MemberVoiceLabels] are the [labels](EncodeLabelSet) for the "member_voice" metric.
+/// [`MemberVoiceLabels`] are the [labels](EncodeLabelSet) for the `member_voice` metric.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
-pub(crate) struct MemberVoiceLabels {
-    pub(crate) guild_id: u64,
-    pub(crate) category_id: Option<u64>,
-    pub(crate) category_name: Option<String>,
-    pub(crate) channel_id: u64,
-    pub(crate) channel_name: String,
-    pub(crate) self_stream: Boolean,
-    pub(crate) self_video: Boolean,
-    pub(crate) self_deaf: Boolean,
-    pub(crate) self_mute: Boolean,
+pub struct MemberVoiceLabels {
+    pub guild_id: u64,
+    pub category_id: Option<u64>,
+    pub category_name: Option<String>,
+    pub channel_id: u64,
+    pub channel_name: String,
+    pub self_stream: Boolean,
+    pub self_video: Boolean,
+    pub self_deaf: Boolean,
+    pub self_mute: Boolean,
 }
 
-/// [BoostLabels] are the [labels](EncodeLabelSet) for the "boost" metric.
+/// [`MessageSentLabels`] are the [labels](EncodeLabelSet) for the `message_sent` metric.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
-pub(crate) struct BoostLabels {
-    pub(crate) guild_id: u64,
+pub struct MessageSentLabels {
+    pub guild_id: u64,
+    pub category_id: Option<u64>,
+    pub category_name: Option<String>,
+    pub channel_id: u64,
+    pub channel_name: String,
+}
+
+/// [`EmoteUsedLabels`] are the [labels](EncodeLabelSet) for the `emote_used` metric.
+#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
+pub struct EmoteUsedLabels {
+    pub guild_id: u64,
+    pub category_id: Option<u64>,
+    pub category_name: Option<String>,
+    pub channel_id: u64,
+    pub channel_name: String,
+    pub reaction: Boolean,
+    pub emoji_id: u64,
+    pub emoji_name: Option<String>,
+}
+
+/// [`ActivityLabels`] are the [labels](EncodeLabelSet) for the `activity` metric.
+#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
+pub struct ActivityLabels {
+    pub guild_id: u64,
+    pub activity_application_id: Option<u64>,
+    pub activity_name: String,
 }
 
 /// Handler is the [servable](serve) bundle of metrics for the exporter.
-pub(crate) struct Handler {
+pub struct Handler {
     registry: Registry,
-    pub(crate) guild: Family<GuildsLabels, Gauge>,
-    pub(crate) message_sent: Family<MessageSentLabels, Counter>,
-    pub(crate) member: Family<MemberLabels, Gauge>,
-    pub(crate) bot: Family<BotLabels, Gauge>,
-    pub(crate) emote_used: Family<EmoteUsedLabels, Counter>,
-    pub(crate) activity: Family<ActivityLabels, Gauge>,
-    pub(crate) member_status: Family<MemberStatusLabels, Gauge>,
-    pub(crate) member_voice: Family<MemberVoiceLabels, Gauge>,
-    pub(crate) boost: Family<BoostLabels, Gauge>,
+    pub guild: Family<GuildsLabels, Gauge>,
+    pub boost: Family<BoostLabels, Gauge>,
+    pub member: Family<MemberLabels, Gauge>,
+    pub bot: Family<BotLabels, Gauge>,
+    pub member_status: Family<MemberStatusLabels, Gauge>,
+    pub member_voice: Family<MemberVoiceLabels, Gauge>,
+    pub message_sent: Family<MessageSentLabels, Counter>,
+    pub emote_used: Family<EmoteUsedLabels, Counter>,
+    pub activity: Family<ActivityLabels, Gauge>,
 }
 
 impl Handler {
@@ -148,7 +149,7 @@ impl Handler {
     ///
     /// The [Registry] is created using a [PREFIX].
     #[instrument]
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         debug!(prefix = PREFIX, "Building metrics registry");
         let mut registry = <Registry>::with_prefix(PREFIX);
 
@@ -160,28 +161,12 @@ impl Handler {
             guild.clone(),
         );
 
-        debug!(metrics_name = "message_sent", "Building metric");
-        let message_sent = Family::<MessageSentLabels, Counter>::default();
+        debug!(metrics_name = "boost", "Building metric");
+        let boost = Family::<BoostLabels, Gauge>::default();
         registry.register(
-            "message_sent",
-            "The total number of discord messages sent by guild members.",
-            message_sent.clone(),
-        );
-
-        debug!(metrics_name = "emote_used", "Building metric");
-        let emote_used = Family::<EmoteUsedLabels, Counter>::default();
-        registry.register(
-            "emote_used",
-            "The total number of discord emotes reacted with by guild members in messages.",
-            emote_used.clone(),
-        );
-
-        debug!(metrics_name = "activity", "Building metric");
-        let activity = Family::<ActivityLabels, Gauge>::default();
-        registry.register(
-            "activity",
-            "The number of current activities.",
-            activity.clone(),
+            "boost",
+            "The number of boosts active on the guild.",
+            boost.clone(),
         );
 
         debug!(metrics_name = "member", "Building metric");
@@ -216,26 +201,42 @@ impl Handler {
             member_voice.clone(),
         );
 
-        debug!(metrics_name = "boost", "Building metric");
-        let boost = Family::<BoostLabels, Gauge>::default();
+        debug!(metrics_name = "message_sent", "Building metric");
+        let message_sent = Family::<MessageSentLabels, Counter>::default();
         registry.register(
-            "boost",
-            "The number of boosts active on the guild.",
-            boost.clone(),
+            "message_sent",
+            "The total number of discord messages sent by guild members.",
+            message_sent.clone(),
+        );
+
+        debug!(metrics_name = "emote_used", "Building metric");
+        let emote_used = Family::<EmoteUsedLabels, Counter>::default();
+        registry.register(
+            "emote_used",
+            "The total number of discord emotes reacted with by guild members in messages.",
+            emote_used.clone(),
+        );
+
+        debug!(metrics_name = "activity", "Building metric");
+        let activity = Family::<ActivityLabels, Gauge>::default();
+        registry.register(
+            "activity",
+            "The number of current activities.",
+            activity.clone(),
         );
 
         Self {
             registry,
             // metrics
             guild,
-            message_sent,
-            emote_used,
-            activity,
+            boost,
             member,
             bot,
             member_status,
             member_voice,
-            boost,
+            message_sent,
+            emote_used,
+            activity,
         }
     }
 }
@@ -245,7 +246,7 @@ impl Handler {
 /// Use the [CancellationToken] to cancel and gracefully shutdown the [Handler].
 /// The metrics can be accessed using the `/metrics` path. It doesn't enforce any authentication.
 #[instrument(skip(handler, shutdown))]
-pub(crate) async fn serve(
+pub async fn serve(
     handler: Arc<Handler>,
     shutdown: CancellationToken,
 ) -> Result<(), Box<dyn std::error::Error>> {

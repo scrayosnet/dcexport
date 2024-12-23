@@ -17,14 +17,14 @@ use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, instrument, warn};
 
-/// [CachedUser] is a bundle of information that should be cached. This cache is complementary to the
+/// [`CachedUser`] is a bundle of information that should be cached. This cache is complementary to the
 /// build-in serenity cache. It contains information required to decrement the prometheus gauges.
 #[derive(Clone, Debug)]
 pub struct CachedUser {
     presence: Presence,
 }
 
-/// [Handler] is the [servable](serve) Discord listener. It listens for Discord gateway events and
+/// [`Handler`] is the [servable](serve) Discord listener. It listens for Discord gateway events and
 /// updates the [metrics](metrics::Handler) accordingly.
 pub struct Handler {
     metrics_handler: Arc<metrics::Handler>,
@@ -32,7 +32,7 @@ pub struct Handler {
 }
 
 impl Handler {
-    /// Creates a new [Handler] for a [metrics::Handler]. Any updates are applied to these metrics.
+    /// Creates a new [`Handler`] for a [`metrics::Handler`]. Any updates are applied to these metrics.
     pub fn new(metrics_handler: Arc<metrics::Handler>) -> Self {
         Self {
             metrics_handler,
@@ -96,7 +96,13 @@ impl EventHandler for Handler {
             .get_or_create(&BoostLabels {
                 guild_id: guild.id.into(),
             })
-            .set(guild.premium_subscription_count.unwrap_or(0) as i64);
+            .set(
+                guild
+                    .premium_subscription_count
+                    .unwrap_or(0)
+                    .try_into()
+                    .expect("expected to fit in i64"),
+            );
 
         // Handle `member` metric
         self.metrics_handler
@@ -104,31 +110,41 @@ impl EventHandler for Handler {
             .get_or_create(&MemberLabels {
                 guild_id: guild.id.into(),
             })
-            .set(guild.member_count as i64);
+            .set(
+                guild
+                    .member_count
+                    .try_into()
+                    .expect("expected to fit in i64"),
+            );
 
         // Handle `bot` metric
-        'bot: {
-            let mut after = None;
-            loop {
-                let Ok(members) = guild.members(&ctx.http, None, after).await else {
-                    warn!(guild_id = guild.id.get(), "Failed to count guild bots");
-                    // remove metric to indicate no bots counted
-                    self.metrics_handler.bot.remove(&BotLabels {
-                        guild_id: guild.id.into(),
-                    });
-                    break 'bot;
-                };
-                self.metrics_handler
-                    .bot
-                    .get_or_create(&BotLabels {
-                        guild_id: guild.id.into(),
-                    })
-                    .inc_by(members.iter().filter(|member| member.user.bot).count() as i64);
-                let Some(last) = members.last() else {
-                    break 'bot;
-                };
-                after = Some(last.user.id);
-            }
+        let mut members_after = None;
+        loop {
+            let Ok(members) = guild.members(&ctx.http, None, members_after).await else {
+                warn!(guild_id = guild.id.get(), "Failed to count guild bots");
+                // Remove metric to indicate no bots were counted (successfully)
+                self.metrics_handler.bot.remove(&BotLabels {
+                    guild_id: guild.id.into(),
+                });
+                break;
+            };
+            self.metrics_handler
+                .bot
+                .get_or_create(&BotLabels {
+                    guild_id: guild.id.into(),
+                })
+                .inc_by(
+                    members
+                        .iter()
+                        .filter(|member| member.user.bot)
+                        .count()
+                        .try_into()
+                        .expect("expected to fit in i64"),
+                );
+            let Some(last) = members.last() else {
+                break;
+            };
+            members_after = Some(last.user.id);
         }
 
         for (user_id, presence) in &guild.presences {
@@ -155,8 +171,7 @@ impl EventHandler for Handler {
                     .inc();
             }
 
-            // store user presences into handler cache such that the metrics can be decremented on
-            // the next presence update
+            // store user presences into handler cache such that the metrics can be decremented on the next presence update
             self.users.write().await.insert(
                 (guild.id, *user_id),
                 CachedUser {
@@ -286,7 +301,13 @@ impl EventHandler for Handler {
             .get_or_create(&BoostLabels {
                 guild_id: new_data.id.into(),
             })
-            .set(new_data.premium_subscription_count.unwrap_or(0) as i64);
+            .set(
+                new_data
+                    .premium_subscription_count
+                    .unwrap_or(0)
+                    .try_into()
+                    .expect("expected to fit in i64"),
+            );
     }
 
     async fn message(&self, ctx: Context, msg: Message) {
@@ -503,8 +524,11 @@ impl EventHandler for Handler {
     }
 }
 
+/// Serves the [`Handler`] and starts listening for guild updates.
+///
+/// Use the [CancellationToken] to cancel and gracefully shutdown the [Handler].
 #[instrument(skip(handler, shutdown))]
-pub(crate) async fn serve(
+pub async fn serve(
     discord_token: &str,
     handler: Handler,
     shutdown: CancellationToken,
@@ -523,7 +547,7 @@ pub(crate) async fn serve(
                 return Err(why.into())
             }
         }
-        _ = shutdown.cancelled() => {
+        () = shutdown.cancelled() => {
             client.shard_manager.shutdown_all().await;
         }
     }

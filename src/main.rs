@@ -15,7 +15,7 @@ use tracing_subscriber::Layer;
 
 /// The default logging level.
 ///
-/// The string has to be deserializable using [LevelFilter::from_str]. In general, the info logging
+/// The string has to be deserializable using [`LevelFilter::from_str`]. In general, the info logging
 /// level should be ideal for staging and production environments. As such, the corresponding env
 /// variable should generally be left empty.
 const DEFAULT_LOGGING_LEVEL: &str = "info";
