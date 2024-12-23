@@ -94,26 +94,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     }
 
-    // Listen for system shutdown signal
-    {
-        // Shadow tracker and token for move
-        let tracker = tracker.clone();
-        let token = token.clone();
-        // Spawn task in tracker
-        tracker.clone().spawn(async move {
-            info!("Listening for signal received");
-            select! {
-                _ = tokio::signal::ctrl_c() => {
-                    info!("Shutdown signal received");
-                }
-                // Explicitly wait for token cancellation such that errors from the handlers
-                // result in an application shutdown
-                () = token.cancelled() => {}
-            }
-            tracker.close();
-            token.cancel();
-        });
+    // Listen for system shutdown signal (in main thread)
+    info!("Listening for signal received");
+    select! {
+        _ = tokio::signal::ctrl_c() => {
+            info!("Shutdown signal received");
+        }
+        // Explicitly wait for token cancellation such that errors from the handlers
+        // result in an application shutdown
+        () = token.cancelled() => {
+            info!("System shutdown before shutdown signal received");
+        }
     }
+    tracker.close();
+    token.cancel();
 
     // Wait for all tasks to finish (graceful shutdown)
     tracker.wait().await;
