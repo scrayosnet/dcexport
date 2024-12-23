@@ -23,5 +23,5 @@ tokio-util = { version = "0.7", features = ["rt"] }
 axum = { version = "0.7", default-features = false, features = ["http1", "tokio", "tower-log", "tracing"] }
 tower-http = { version = "0.6", features = ["trace"] }
 tracing = { version = "0.1" }
-tracing-subscriber = { version = "0.3" }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 thiserror = { version = "2.0" }

@@ -39,10 +39,10 @@ For more detailed information about the metrics and their labels, see the [sourc
 Before any Discord guilds can be tracked, we first need to set up dcexport on the corresponding machine. The application
 is configured using environment variables.
 
-| Env Variable           | Default    | Description                                                                 |
-|------------------------|------------|-----------------------------------------------------------------------------|
-| DCEXPORT_DISCORD_TOKEN | (required) | The token of the Discord bot that is on the guilds that should be exported. |
-| DCEXPORT_LOGGING_LEVEL | info       | The logging level of the application.                                       |
+| Env Variable           | Default    | Description                                                                                           |
+|------------------------|------------|-------------------------------------------------------------------------------------------------------|
+| DCEXPORT_DISCORD_TOKEN | (required) | The token of the Discord bot that is on the guilds that should be exported.                           |
+| DCEXPORT_LOG           |            | The log filter configuration of the application. See [here][tracing-log-example] for more information |
 
 #### From Binaries
 
@@ -170,3 +170,5 @@ on what that means.
 [helm-chart-docs]: https://helm.sh/
 
 [mit-license-doc]: https://choosealicense.com/licenses/mit/
+
+[tracing-log-example]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#example-syntax

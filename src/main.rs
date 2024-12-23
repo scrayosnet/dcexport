@@ -7,7 +7,6 @@ mod discord;
 mod metrics;
 
 use std::env;
-use std::str::FromStr;
 use std::sync::Arc;
 use tokio::select;
 use tokio_util::sync::CancellationToken;
@@ -16,22 +15,15 @@ use tracing::metadata::LevelFilter;
 use tracing::{error, info};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::Layer;
-
-/// The default logging level.
-///
-/// The string has to be deserializable using [`LevelFilter::from_str`]. In general, the info logging
-/// level should be ideal for staging and production environments. As such, the corresponding env
-/// variable should generally be left empty.
-const DEFAULT_LOGGING_LEVEL: &str = "info";
+use tracing_subscriber::{EnvFilter, filter::FromEnvError};
 
 /// The public response error wrapper for all errors that can be relayed to the caller.
 #[derive(thiserror::Error, Debug)]
 enum Error {
     #[error("missing discord token")]
     MissingDiscordToken(#[from] env::VarError),
-    #[error("failed to parse logging level")]
-    InvalidFilter(#[from] tracing::metadata::ParseLevelFilterError),
+    #[error("failed to parse logging filter")]
+    InvalidLogFilter(#[from] FromEnvError),
 }
 
 /// Initializes the application and starts the Discord bot and metrics server.
@@ -43,16 +35,15 @@ enum Error {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Read configuration from the environment variables
     let discord_token = env::var("DCEXPORT_DISCORD_TOKEN").map_err(Error::MissingDiscordToken)?;
-    let logging_level =
-        env::var("DCEXPORT_LOGGING_LEVEL").unwrap_or(DEFAULT_LOGGING_LEVEL.to_string());
 
     // Initialize logging with sentry hook
+    let env_filter = EnvFilter::builder()
+        .with_default_directive(LevelFilter::INFO.into())
+        .with_env_var("DCEXPORT_LOG")
+        .from_env().map_err(Error::InvalidLogFilter)?;
     tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::fmt::layer()
-                .compact()
-                .with_filter(LevelFilter::from_str(&logging_level).map_err(Error::InvalidFilter)?),
-        )
+        .with(tracing_subscriber::fmt::layer().compact())
+        .with(env_filter)
         .init();
 
     // Create metrics handler
