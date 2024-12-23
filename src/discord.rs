@@ -1,3 +1,5 @@
+//! This module implements the Discord guild listener. Any updates are applied to the metrics handler.
+
 use crate::metrics;
 use crate::metrics::{
     ActivityLabels, BoostLabels, BotLabels, EmoteUsedLabels, GuildsLabels, MemberLabels,

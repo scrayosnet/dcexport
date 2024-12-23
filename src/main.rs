@@ -1,3 +1,8 @@
+//! A Discord guild Prometheus exporter. This application uses a Discord bot to track multiple Discord guilds.
+
+#![deny(clippy::all)]
+#![forbid(unsafe_code)]
+
 mod discord;
 mod metrics;
 
