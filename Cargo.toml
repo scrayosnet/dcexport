@@ -25,3 +25,4 @@ tower-http = { version = "0.6", features = ["trace"] }
 tracing = { version = "0.1" }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 thiserror = { version = "2.0" }
+clap = { version = "4.5", features = ["derive", "env"] }

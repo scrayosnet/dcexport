@@ -1,112 +1,71 @@
-//! A Discord guild Prometheus exporter. This application uses a Discord bot to track multiple Discord guilds.
+use clap::Parser;
+use std::fmt::{Display, Formatter};
+use std::net::SocketAddr;
+use std::str::FromStr;
+use tracing_subscriber::prelude::*;
+use tracing_subscriber::EnvFilter;
 
-#![deny(clippy::all)]
-#![forbid(unsafe_code)]
+/// The default socket address tuple and port that dcexport should listen on.
+pub const DEFAULT_ADDRESS: &str = "0.0.0.0:8080";
 
-mod discord;
-mod metrics;
+/// The default address (port) of the application metrics server.
+pub const DEFAULT_LOG: &str = "info";
 
-use std::env;
-use std::sync::Arc;
-use tokio::select;
-use tokio_util::sync::CancellationToken;
-use tokio_util::task::TaskTracker;
-use tracing::metadata::LevelFilter;
-use tracing::{error, info};
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::{EnvFilter, filter::FromEnvError};
+/// [`Log`] is a wrapper for [`EnvFilter`] such that it implements [`Clone`]. This is required to be a clap arg.
+#[derive(Debug)]
+struct Log(EnvFilter);
 
-/// The public response error wrapper for all errors that can be relayed to the caller.
-#[derive(thiserror::Error, Debug)]
-enum Error {
-    #[error("missing discord token")]
-    MissingDiscordToken(#[from] env::VarError),
-    #[error("failed to parse logging filter")]
-    InvalidLogFilter(#[from] FromEnvError),
+impl Display for Log {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
 }
 
-/// Initializes the application and starts the Discord bot and metrics server.
-///
-/// The settings are initially read and frozen, any future changes on e.g. the environment variables
-/// will not change the application configuration. The application also implements a graceful shutdown
-/// procedure that will stop the subtasks and wait for them to finish.
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Read configuration from the environment variables
-    let discord_token = env::var("DCEXPORT_DISCORD_TOKEN").map_err(Error::MissingDiscordToken)?;
+impl Clone for Log {
+    fn clone(&self) -> Self {
+        Log(EnvFilter::from(&self.0.to_string()))
+    }
+}
 
-    // Initialize logging with sentry hook
-    let env_filter = EnvFilter::builder()
-        .with_default_directive(LevelFilter::INFO.into())
-        .with_env_var("DCEXPORT_LOG")
-        .from_env().map_err(Error::InvalidLogFilter)?;
+impl FromStr for Log {
+    type Err = tracing_subscriber::filter::ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Log(EnvFilter::try_new(s)?))
+    }
+}
+
+/// Arguments to configure this runtime of the application before it is started.
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    #[arg(long, env = "DCEXPORT_DISCORD_TOKEN")]
+    discord_token: String,
+    #[arg(long, env = "DCEXPORT_LOG", default_value = DEFAULT_LOG, value_parser = clap::value_parser!(Log))]
+    log: Log,
+    #[arg(long, env = "DCEXPORT_ADDRESS", default_value = DEFAULT_ADDRESS)]
+    address: SocketAddr,
+}
+
+/// Initializes the application and invokes dcexport.
+///
+/// This initializes the logging, aggregates configuration and starts the multithreaded tokio runtime. This is only a
+/// thin-wrapper around the dcexport crate that supplies the necessary settings. The application also implements a
+/// graceful shutdown procedure that will stop the subtasks and wait for them to finish.
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // parse the arguments and configuration
+    let args = Args::parse();
+
+    // Initialize logging
     tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer().compact())
-        .with(env_filter)
+        .with(args.log.0)
         .init();
 
-    // Create metrics handler
-    let metrics_handler = Arc::new(metrics::Handler::new());
-
-    // Create discord handler
-    let discord_handler = discord::Handler::new(Arc::clone(&metrics_handler));
-
-    // Create tracker and cancellation token, they are used to implement a graceful shutdown for the handlers
-    let tracker = TaskTracker::new();
-    let token = CancellationToken::new();
-
-    // Start discord handler
-    {
-        // Shadow tracker and token for move
-        let tracker = tracker.clone();
-        let token = token.clone();
-        // Spawn task in tracker
-        tracker.clone().spawn(async move {
-            info!("Starting discord handler");
-            if let Err(why) = discord::serve(&discord_token, discord_handler, token.clone()).await {
-                error!(err = why, "Discord handler aborted");
-            }
-            info!("Stopped discord handler");
-            tracker.close();
-            token.cancel();
-        });
-    }
-
-    // Start metrics handler
-    {
-        // Shadow tracker and token for move
-        let tracker = tracker.clone();
-        let token = token.clone();
-        // Spawn task in tracker
-        tracker.clone().spawn(async move {
-            info!("Starting metrics handler");
-            if let Err(why) = metrics::serve(metrics_handler, token.clone()).await {
-                error!(err = why, "Metrics handler aborted");
-            }
-            info!("Stopped metrics handler");
-            tracker.close();
-            token.cancel();
-        });
-    }
-
-    // Listen for system shutdown signal (in main thread)
-    info!("Listening for signal received");
-    select! {
-        _ = tokio::signal::ctrl_c() => {
-            info!("Shutdown signal received");
-        }
-        // Explicitly wait for token cancellation such that errors from the handlers
-        // result in an application shutdown
-        () = token.cancelled() => {
-            info!("System shutdown before shutdown signal received");
-        }
-    }
-    tracker.close();
-    token.cancel();
-
-    // Wait for all tasks to finish (graceful shutdown)
-    tracker.wait().await;
-
-    Ok(())
+    // Run dcexport blocking
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async { dcexport::start(args.address, args.discord_token).await })
 }

@@ -37,12 +37,13 @@ For more detailed information about the metrics and their labels, see the [sourc
 ### Setup dcexport
 
 Before any Discord guilds can be tracked, we first need to set up dcexport on the corresponding machine. The application
-is configured using environment variables.
+is configured using the cli or environment variables.
 
-| Env Variable           | Default    | Description                                                                                           |
-|------------------------|------------|-------------------------------------------------------------------------------------------------------|
-| DCEXPORT_DISCORD_TOKEN | (required) | The token of the Discord bot that is on the guilds that should be exported.                           |
-| DCEXPORT_LOG           |            | The log filter configuration of the application. See [here][tracing-log-example] for more information |
+| Env Variable           | Default      | Description                                                                                           |
+|------------------------|--------------|-------------------------------------------------------------------------------------------------------|
+| DCEXPORT_DISCORD_TOKEN | (required)   | The token of the Discord bot that is on the guilds that should be exported.                           |
+| DCEXPORT_LOG           | info         | The log filter configuration of the application. See [here][tracing-log-example] for more information |
+| DCEXPORT_ADDRESS       | 0.0.0.0:8080 | The metrics server address.                                                                           |
 
 #### From Binaries
 

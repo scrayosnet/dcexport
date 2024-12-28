@@ -12,6 +12,7 @@ use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
 use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::registry::Registry;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tower_http::trace::TraceLayer;
@@ -19,9 +20,6 @@ use tracing::{debug, instrument, trace};
 
 /// The prefix ued to all application metrics.
 const PREFIX: &str = "dcexport";
-
-/// The address (port) of the application metrics.
-const ADDRESS: &str = "0.0.0.0:8080";
 
 /// [Boolean] is a wrapper for [bool] that implements [`EncodeLabelValue`] such that it can be used in
 /// metrics labels.
@@ -249,6 +247,7 @@ impl Handler {
 /// The metrics can be accessed using the `/metrics` path. It doesn't enforce any authentication.
 #[instrument(skip(handler, shutdown))]
 pub async fn serve(
+    address: &SocketAddr,
     handler: Arc<Handler>,
     shutdown: CancellationToken,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -260,8 +259,8 @@ pub async fn serve(
         .with_state(());
 
     // Bind tcp listener
-    debug!(address = ADDRESS, "Starting tcp listener");
-    let listener = tokio::net::TcpListener::bind(ADDRESS).await?;
+    debug!(address = %address, "Starting tcp listener");
+    let listener = tokio::net::TcpListener::bind(address).await?;
 
     // Serve webserver and wait
     debug!("Serving axum router");
