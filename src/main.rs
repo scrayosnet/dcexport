@@ -5,10 +5,10 @@ use std::str::FromStr;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 
-/// The default socket address tuple and port that dcexport should listen on.
+/// The default address (port) of the application metrics server.
 pub const DEFAULT_ADDRESS: &str = "0.0.0.0:8080";
 
-/// The default address (port) of the application metrics server.
+/// The default log level of the application.
 pub const DEFAULT_LOG: &str = "info";
 
 /// [`Log`] is a wrapper for [`EnvFilter`] such that it implements [`Clone`]. This is required to be a clap arg.

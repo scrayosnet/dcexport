@@ -52,7 +52,7 @@ executable and run it within the shell of your choice:
 
 ```shell
 chmod +x dcexport
-DCEXPORT_DISCORD_TOKEN=<your-token> ./dcexport
+./dcexport --discord-token <your-token>
 ```
 
 #### Using Docker

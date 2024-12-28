@@ -3,7 +3,7 @@
 use axum::body::Body;
 use axum::http::header::CONTENT_TYPE;
 use axum::http::StatusCode;
-use axum::response::Response;
+use axum::response::{Html, Response};
 use axum::routing::get;
 use axum::{Extension, Router};
 use prometheus_client::encoding::text::encode;
@@ -253,6 +253,7 @@ pub async fn serve(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Create webserver for metrics
     let rest_app = Router::new()
+        .route("/", get(index))
         .route("/metrics", get(metrics))
         .layer(Extension(Arc::clone(&handler)))
         .layer(TraceLayer::new_for_http())
@@ -269,6 +270,12 @@ pub async fn serve(
         .await?;
 
     Ok(())
+}
+
+/// The index endpoint handler. It shows an index page.
+#[instrument]
+async fn index() -> Html<&'static str> {
+    Html("dcexport - <a href=\"/metrics\">Metrics</a>")
 }
 
 /// The metrics endpoint handler. It encodes the current registry into the response body.

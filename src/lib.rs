@@ -13,7 +13,7 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use tracing::{error, info, warn};
 
-/// The application also implements a graceful shutdown
+/// Starts the application discord listener and metrics server. The application also implements a graceful shutdown
 /// procedure that will stop the subtasks and wait for them to finish.
 ///
 /// # Errors
