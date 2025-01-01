@@ -20,7 +20,7 @@ prometheus-client = { version = "0.22" }
 serenity = { version = "0.12" }
 tokio = { version = "1.42", features = ["macros", "rt-multi-thread", "signal"] }
 tokio-util = { version = "0.7", features = ["rt"] }
-axum = { version = "0.7", default-features = false, features = ["http1", "tokio", "tower-log", "tracing"] }
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "tower-log", "tracing"] }
 tower-http = { version = "0.6", features = ["trace"] }
 tracing = { version = "0.1" }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

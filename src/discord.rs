@@ -5,13 +5,12 @@ use crate::metrics::{
     ActivityLabels, BoostLabels, BotLabels, EmoteUsedLabels, GuildsLabels, MemberLabels,
     MemberStatusLabels, MemberVoiceLabels, MessageSentLabels,
 };
-use axum::async_trait;
 use serenity::all::{
     parse_emoji, ChannelId, Context, EventHandler, GatewayIntents, Guild, GuildChannel, GuildId,
     Member, Message, PartialGuild, Presence, Reaction, ReactionType, UnavailableGuild, User,
     UserId, VoiceState,
 };
-use serenity::Client;
+use serenity::{async_trait, Client};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::select;
