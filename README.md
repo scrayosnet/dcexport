@@ -39,11 +39,11 @@ For more detailed information about the metrics and their labels, see the [sourc
 Before any Discord guilds can be tracked, we first need to set up dcexport on the corresponding machine. The application
 is configured using the cli or environment variables.
 
-| Env Variable           | Default      | Description                                                                                           |
-|------------------------|--------------|-------------------------------------------------------------------------------------------------------|
-| DCEXPORT_DISCORD_TOKEN | (required)   | The token of the Discord bot that is on the guilds that should be exported.                           |
-| DCEXPORT_LOG           | info         | The log filter configuration of the application. See [here][tracing-log-example] for more information |
-| DCEXPORT_ADDRESS       | 0.0.0.0:8080 | The metrics server address.                                                                           |
+| Env Variable  | Default       | Description                                                                                            |
+|---------------|---------------|--------------------------------------------------------------------------------------------------------|
+| DISCORD_TOKEN | (required)    | The token of the Discord bot that is on the guilds that should be exported.                            |
+| LOG_LEVEL     | dcexport=info | The log filter configuration of the application. See [here][tracing-log-example] for more information. |
+| ADDRESS       | 0.0.0.0:8080  | The metrics server address.                                                                            |
 
 #### From Binaries
 
@@ -62,7 +62,7 @@ Those images are hardened and provide the optimal environment to execute dcexpor
 
 ```shell
 docker run --rm \
-  -e DCEXPORT_DISCORD_TOKEN=<your-token> \
+  -e DISCORD_TOKEN=<your-token> \
   -p 8080/tcp \
   --name dcexport \
   ghcr.io/scrayosnet/dcexport:latest

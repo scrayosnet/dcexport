@@ -9,7 +9,7 @@ use tracing_subscriber::EnvFilter;
 pub const DEFAULT_ADDRESS: &str = "0.0.0.0:8080";
 
 /// The default log level of the application.
-pub const DEFAULT_LOG: &str = "info";
+pub const DEFAULT_LOG_LEVEL: &str = "dcexport=info";
 
 /// [`Log`] is a wrapper for [`EnvFilter`] such that it implements [`Clone`]. This is required to be a clap arg.
 #[derive(Debug)]
@@ -39,11 +39,11 @@ impl FromStr for Log {
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    #[arg(long, env = "DCEXPORT_DISCORD_TOKEN")]
+    #[arg(long, env)]
     discord_token: String,
-    #[arg(long, env = "DCEXPORT_LOG", default_value = DEFAULT_LOG, value_parser = clap::value_parser!(Log))]
-    log: Log,
-    #[arg(long, env = "DCEXPORT_ADDRESS", default_value = DEFAULT_ADDRESS)]
+    #[arg(long, env, default_value = DEFAULT_LOG_LEVEL, value_parser = clap::value_parser!(Log))]
+    log_level: Log,
+    #[arg(long, env, default_value = DEFAULT_ADDRESS)]
     address: SocketAddr,
 }
 
@@ -59,7 +59,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging
     tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer().compact())
-        .with(args.log.0)
+        .with(args.log_level.0)
         .init();
 
     // Run dcexport blocking
