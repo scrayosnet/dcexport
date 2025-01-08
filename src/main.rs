@@ -6,7 +6,7 @@ use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 
 /// The default address (port) of the application metrics server.
-pub const DEFAULT_ADDRESS: &str = "0.0.0.0:8080";
+pub const DEFAULT_ADDRESS: &str = "0.0.0.0:10030";
 
 /// The default log level of the application.
 pub const DEFAULT_LOG_LEVEL: &str = "dcexport=info";

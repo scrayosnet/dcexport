@@ -15,7 +15,7 @@ RUN set -eux \
 FROM scratch
 
 # declare our metrics port
-EXPOSE 8080
+EXPOSE 10030
 
 # copy the raw binary into the new image
 COPY --from=builder "/usr/src/dcexport/target/release/dcexport" "/dcexport"

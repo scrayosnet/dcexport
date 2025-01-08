@@ -43,7 +43,7 @@ is configured using the cli or environment variables.
 |---------------|---------------|--------------------------------------------------------------------------------------------------------|
 | DISCORD_TOKEN | (required)    | The token of the Discord bot that is on the guilds that should be exported.                            |
 | LOG_LEVEL     | dcexport=info | The log filter configuration of the application. See [here][tracing-log-example] for more information. |
-| ADDRESS       | 0.0.0.0:8080  | The metrics server address.                                                                            |
+| ADDRESS       | 0.0.0.0:10030 | The metrics server address.                                                                            |
 
 #### From Binaries
 
@@ -63,7 +63,7 @@ Those images are hardened and provide the optimal environment to execute dcexpor
 ```shell
 docker run --rm \
   -e DISCORD_TOKEN=<your-token> \
-  -p 8080/tcp \
+  -p 10030/tcp \
   --name dcexport \
   ghcr.io/scrayosnet/dcexport:latest
 ```
@@ -79,7 +79,7 @@ To verify whether everything works as expected, we can invoke the following comm
 reported result:
 
 ```shell
-curl --request GET -sL --url 'http://localhost:8080/'
+curl --request GET -sL --url 'http://localhost:10030/'
 ```
 
 If the result shows any metrics, dcexport is now setup successfully and can be used to track Discord guilds.
@@ -103,7 +103,7 @@ scrape_configs:
   scheme: http
   static_configs:
     - targets:
-      - dcexport:8080
+      - dcexport:10030
 ```
 
 #### CRD-based Configuration
