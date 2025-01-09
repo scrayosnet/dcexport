@@ -56,6 +56,16 @@ pub struct GuildsLabels {
     pub guild_id: u64,
 }
 
+/// [`ChannelLabels`] are the [labels](EncodeLabelSet) for the `channel` metric.
+#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
+pub struct ChannelLabels {
+    pub guild_id: u64,
+    pub channel_id: u64,
+    pub channel_name: String,
+    pub channel_nsfw: Boolean,
+    pub channel_type: String,
+}
+
 /// [`BoostLabels`] are the [labels](EncodeLabelSet) for the `boost` metric.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub struct BoostLabels {
@@ -90,9 +100,7 @@ pub struct MemberStatusLabels {
 pub struct MemberVoiceLabels {
     pub guild_id: u64,
     pub category_id: Option<u64>,
-    pub category_name: Option<String>,
     pub channel_id: u64,
-    pub channel_name: String,
     pub self_stream: Boolean,
     pub self_video: Boolean,
     pub self_deaf: Boolean,
@@ -100,13 +108,12 @@ pub struct MemberVoiceLabels {
 }
 
 /// [`MessageSentLabels`] are the [labels](EncodeLabelSet) for the `message_sent` metric.
+#[allow(clippy::struct_field_names)]
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub struct MessageSentLabels {
     pub guild_id: u64,
     pub category_id: Option<u64>,
-    pub category_name: Option<String>,
     pub channel_id: u64,
-    pub channel_name: String,
 }
 
 /// [`EmoteUsedLabels`] are the [labels](EncodeLabelSet) for the `emote_used` metric.
@@ -114,9 +121,7 @@ pub struct MessageSentLabels {
 pub struct EmoteUsedLabels {
     pub guild_id: u64,
     pub category_id: Option<u64>,
-    pub category_name: Option<String>,
     pub channel_id: u64,
-    pub channel_name: String,
     pub reaction: Boolean,
     pub emoji_id: u64,
     pub emoji_name: Option<String>,
@@ -134,6 +139,7 @@ pub struct ActivityLabels {
 pub struct Handler {
     registry: Registry,
     pub guild: Family<GuildsLabels, Gauge>,
+    pub channel: Family<ChannelLabels, Gauge>,
     pub boost: Family<BoostLabels, Gauge>,
     pub member: Family<MemberLabels, Gauge>,
     pub bot: Family<BotLabels, Gauge>,
@@ -159,6 +165,14 @@ impl Handler {
             "guild",
             "The number of guilds handled by the exporter.",
             guild.clone(),
+        );
+
+        debug!(metrics_name = "channel", "Building metric");
+        let channel = Family::<ChannelLabels, Gauge>::default();
+        registry.register(
+            "channel",
+            "The number of channels on the guild.",
+            channel.clone(),
         );
 
         debug!(metrics_name = "boost", "Building metric");
@@ -229,6 +243,7 @@ impl Handler {
             registry,
             // metrics
             guild,
+            channel,
             boost,
             member,
             bot,
