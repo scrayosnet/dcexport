@@ -185,8 +185,8 @@ impl EventHandler for Handler {
         for (_, voice) in guild.voice_states {
             if let Some(channel_id) = &voice.channel_id {
                 let Ok((category, channel)) = self.category_channel(&ctx, channel_id).await else {
-                    warn!(guild_id=guild.id.get(), channel_id=channel_id.get(), "failed to get category and channel, this might cause inconsistencies in the metrics!");
-                    return;
+                    warn!(guild_id=guild.id.get(), channel_id=channel_id.get(), "failed to get category and channel, this might cause inconsistencies in the metrics");
+                    continue;
                 };
                 self.metrics_handler
                     .member_voice
@@ -324,7 +324,7 @@ impl EventHandler for Handler {
         }
 
         let Ok((category, channel)) = self.category_channel(&ctx, &msg.channel_id).await else {
-            warn!(guild_id=guild_id.get(), channel_id=msg.channel_id.get(), "failed to get category and channel, this might cause inconsistencies in the metrics!");
+            warn!(guild_id=guild_id.get(), channel_id=msg.channel_id.get(), "failed to get category and channel, this might cause inconsistencies in the metrics");
             return;
         };
 
@@ -384,7 +384,7 @@ impl EventHandler for Handler {
 
         let Ok((category, channel)) = self.category_channel(&ctx, &add_reaction.channel_id).await
         else {
-            warn!(guild_id=guild_id.get(), channel_id=add_reaction.channel_id.get(), "failed to get category and channel, this might cause inconsistencies in the metrics!");
+            warn!(guild_id=guild_id.get(), channel_id=add_reaction.channel_id.get(), "failed to get category and channel, this might cause inconsistencies in the metrics");
             return;
         };
 
@@ -472,38 +472,65 @@ impl EventHandler for Handler {
             // Only tracks guild events
             return;
         };
-        info!(guild_id = guild_id.get(), "Voice state update");
+        info!(
+            guild_id = guild_id.get(),
+            has_cached = old.is_some(),
+            "Voice state update"
+        );
 
         // Decrement gauges for previous state if cached
-        if let Some(old) = old {
-            if let Some(channel_id) = &old.channel_id {
-                let Ok((category, channel)) = self.category_channel(&ctx, channel_id).await else {
-                    warn!(guild_id=guild_id.get(), channel_id=channel_id.get(), "failed to get category and channel, this might cause inconsistencies in the metrics!");
-                    return;
-                };
+        'dec: {
+            let Some(old) = old else {
+                break 'dec;
+            };
 
-                // Handle `member_voice` metric (decrement)
-                self.metrics_handler
-                    .member_voice
-                    .get_or_create(&MemberVoiceLabels {
-                        guild_id: guild_id.into(),
-                        category_id: category.as_ref().map(|ch| ch.id.into()),
-                        category_name: category.as_ref().map(|ch| ch.name.clone()),
-                        channel_id: channel.id.into(),
-                        channel_name: channel.name.clone(),
-                        self_stream: old.self_stream.unwrap_or(false).into(),
-                        self_video: old.self_video.into(),
-                        self_deaf: old.self_deaf.into(),
-                        self_mute: old.self_mute.into(),
-                    })
-                    .dec();
-            }
+            // Get channel and category
+            let Some(channel_id) = &old.channel_id else {
+                warn!(
+                    guild_id = guild_id.get(),
+                    user_id = old.user_id.get(),
+                    "failed to get old channel, this might cause inconsistencies in the metrics"
+                );
+                break 'dec;
+            };
+
+            let Ok((category, channel)) = self.category_channel(&ctx, channel_id).await else {
+                warn!(guild_id=guild_id.get(), channel_id=channel_id.get(), "failed to old get category and channel, this might cause inconsistencies in the metrics");
+                break 'dec;
+            };
+
+            // Handle `member_voice` metric (decrement)
+            self.metrics_handler
+                .member_voice
+                .get_or_create(&MemberVoiceLabels {
+                    guild_id: guild_id.into(),
+                    category_id: category.as_ref().map(|ch| ch.id.into()),
+                    category_name: category.as_ref().map(|ch| ch.name.clone()),
+                    channel_id: channel.id.into(),
+                    channel_name: channel.name.clone(),
+                    self_stream: old.self_stream.unwrap_or(false).into(),
+                    self_video: old.self_video.into(),
+                    self_deaf: old.self_deaf.into(),
+                    self_mute: old.self_mute.into(),
+                })
+                .dec();
         }
 
-        if let Some(channel_id) = &new.channel_id {
+        // Increment gauges for new state
+        'inc: {
+            // Get channel and category
+            let Some(channel_id) = &new.channel_id else {
+                warn!(
+                    guild_id = guild_id.get(),
+                    user_id = new.user_id.get(),
+                    "failed to get new channel, this might cause inconsistencies in the metrics"
+                );
+                break 'inc;
+            };
+
             let Ok((category, channel)) = self.category_channel(&ctx, channel_id).await else {
-                warn!(guild_id=guild_id.get(), channel_id=channel_id.get(), "failed to get category and channel, this might cause inconsistencies in the metrics!");
-                return;
+                warn!(guild_id=guild_id.get(), channel_id=channel_id.get(), "failed to new get category and channel, this might cause inconsistencies in the metrics");
+                break 'inc;
             };
 
             // Handle `member_voice` metric
