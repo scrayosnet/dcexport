@@ -40,33 +40,32 @@ impl Handler {
             users: RwLock::new(HashMap::new()),
         }
     }
+}
 
-    /// Gets the root category and channel for a guild channel. It expects all relevant items to be cached.
-    async fn category_channel(
-        &self,
-        ctx: &Context,
-        guild_id: &GuildId,
-        channel_id: &ChannelId,
-    ) -> (Option<GuildChannel>, GuildChannel) {
-        // Get base
-        let guild = ctx.cache.guild(guild_id).expect("Guild not found");
-        let mut channel = &guild.channels[channel_id];
+/// Gets the root category and channel for a guild channel. It expects all relevant items to be cached.
+fn category_channel(
+    ctx: &Context,
+    guild_id: GuildId,
+    channel_id: ChannelId,
+) -> (Option<GuildChannel>, GuildChannel) {
+    // Get base
+    let guild = ctx.cache.guild(guild_id).expect("Guild not found");
+    let mut channel = &guild.channels[&channel_id];
 
-        // Handle category
-        let Some(parent_id) = channel.parent_id else {
-            return (None, channel.clone());
-        };
-        let category = &guild.channels[&parent_id];
+    // Handle category
+    let Some(parent_id) = channel.parent_id else {
+        return (None, channel.clone());
+    };
+    let category = &guild.channels[&parent_id];
 
-        // Handle thread
-        let Some(parent_id) = category.parent_id else {
-            return (Some(category.clone()), channel.clone());
-        };
-        channel = category;
-        let category = &guild.channels[&parent_id];
+    // Handle thread
+    let Some(parent_id) = category.parent_id else {
+        return (Some(category.clone()), channel.clone());
+    };
+    channel = category;
+    let category = &guild.channels[&parent_id];
 
-        (Some(category.clone()), channel.clone())
-    }
+    (Some(category.clone()), channel.clone())
 }
 
 #[async_trait]
@@ -175,7 +174,7 @@ impl EventHandler for Handler {
         // Handle `member_voice` metric
         for (_, voice) in guild.voice_states {
             if let Some(channel_id) = &voice.channel_id {
-                let (category, channel) = self.category_channel(&ctx, &guild.id, channel_id).await;
+                let (category, channel) = category_channel(&ctx, guild.id, *channel_id);
                 self.metrics_handler
                     .member_voice
                     .get_or_create(&MemberVoiceLabels {
@@ -311,7 +310,7 @@ impl EventHandler for Handler {
             return;
         }
 
-        let (category, channel) = self.category_channel(&ctx, &guild_id, &msg.channel_id).await;
+        let (category, channel) = category_channel(&ctx, guild_id, msg.channel_id);
 
         // Handle `message_sent` metric
         self.metrics_handler
@@ -367,7 +366,7 @@ impl EventHandler for Handler {
             return;
         };
 
-        let (category, channel) = self.category_channel(&ctx, &guild_id, &add_reaction.channel_id).await;
+        let (category, channel) = category_channel(&ctx, guild_id, add_reaction.channel_id);
 
         // Handle `emote_used` metric
         self.metrics_handler
@@ -476,7 +475,7 @@ impl EventHandler for Handler {
                 break 'dec;
             };
 
-            let (category, channel) = self.category_channel(&ctx, &guild_id, channel_id).await;
+            let (category, channel) = category_channel(&ctx, guild_id, *channel_id);
 
             // Handle `member_voice` metric (decrement)
             self.metrics_handler
@@ -508,7 +507,7 @@ impl EventHandler for Handler {
                 break 'inc;
             };
 
-            let (category, channel) = self.category_channel(&ctx, &guild_id, channel_id).await;
+            let (category, channel) = category_channel(&ctx, guild_id, *channel_id);
 
             // Handle `member_voice` metric
             self.metrics_handler
