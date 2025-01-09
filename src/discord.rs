@@ -41,40 +41,31 @@ impl Handler {
         }
     }
 
-    /// Gets the root category and channel for a channel (any kind).
+    /// Gets the root category and channel for a guild channel. It expects all relevant items to be cached.
     async fn category_channel(
         &self,
         ctx: &Context,
+        guild_id: &GuildId,
         channel_id: &ChannelId,
-    ) -> Result<(Option<GuildChannel>, GuildChannel), serenity::Error> {
-        let mut channel = channel_id
-            .to_channel(&ctx.http)
-            .await?
-            .guild()
-            .expect("channel is not part of a guild");
+    ) -> (Option<GuildChannel>, GuildChannel) {
+        // Get base
+        let guild = ctx.cache.guild(guild_id).expect("Guild not found");
+        let mut channel = &guild.channels[channel_id];
 
         // Handle category
         let Some(parent_id) = channel.parent_id else {
-            return Ok((None, channel));
+            return (None, channel.clone());
         };
-        let category = parent_id
-            .to_channel(&ctx.http)
-            .await?
-            .guild()
-            .expect("channel is not part of a guild");
+        let category = &guild.channels[&parent_id];
 
         // Handle thread
         let Some(parent_id) = category.parent_id else {
-            return Ok((Some(category), channel));
+            return (Some(category.clone()), channel.clone());
         };
         channel = category;
-        let category = parent_id
-            .to_channel(&ctx.http)
-            .await?
-            .guild()
-            .expect("channel is not part of a guild");
+        let category = &guild.channels[&parent_id];
 
-        Ok((Some(category), channel))
+        (Some(category.clone()), channel.clone())
     }
 }
 
@@ -184,10 +175,7 @@ impl EventHandler for Handler {
         // Handle `member_voice` metric
         for (_, voice) in guild.voice_states {
             if let Some(channel_id) = &voice.channel_id {
-                let Ok((category, channel)) = self.category_channel(&ctx, channel_id).await else {
-                    warn!(guild_id=guild.id.get(), channel_id=channel_id.get(), "failed to get category and channel, this might cause inconsistencies in the metrics");
-                    continue;
-                };
+                let (category, channel) = self.category_channel(&ctx, &guild.id, channel_id).await;
                 self.metrics_handler
                     .member_voice
                     .get_or_create(&MemberVoiceLabels {
@@ -323,10 +311,7 @@ impl EventHandler for Handler {
             return;
         }
 
-        let Ok((category, channel)) = self.category_channel(&ctx, &msg.channel_id).await else {
-            warn!(guild_id=guild_id.get(), channel_id=msg.channel_id.get(), "failed to get category and channel, this might cause inconsistencies in the metrics");
-            return;
-        };
+        let (category, channel) = self.category_channel(&ctx, &guild_id, &msg.channel_id).await;
 
         // Handle `message_sent` metric
         self.metrics_handler
@@ -382,11 +367,7 @@ impl EventHandler for Handler {
             return;
         };
 
-        let Ok((category, channel)) = self.category_channel(&ctx, &add_reaction.channel_id).await
-        else {
-            warn!(guild_id=guild_id.get(), channel_id=add_reaction.channel_id.get(), "failed to get category and channel, this might cause inconsistencies in the metrics");
-            return;
-        };
+        let (category, channel) = self.category_channel(&ctx, &guild_id, &add_reaction.channel_id).await;
 
         // Handle `emote_used` metric
         self.metrics_handler
@@ -486,6 +467,7 @@ impl EventHandler for Handler {
 
             // Get channel and category
             let Some(channel_id) = &old.channel_id else {
+                // Also caused by user leaving to another guild
                 warn!(
                     guild_id = guild_id.get(),
                     user_id = old.user_id.get(),
@@ -494,10 +476,7 @@ impl EventHandler for Handler {
                 break 'dec;
             };
 
-            let Ok((category, channel)) = self.category_channel(&ctx, channel_id).await else {
-                warn!(guild_id=guild_id.get(), channel_id=channel_id.get(), "failed to old get category and channel, this might cause inconsistencies in the metrics");
-                break 'dec;
-            };
+            let (category, channel) = self.category_channel(&ctx, &guild_id, channel_id).await;
 
             // Handle `member_voice` metric (decrement)
             self.metrics_handler
@@ -520,6 +499,7 @@ impl EventHandler for Handler {
         'inc: {
             // Get channel and category
             let Some(channel_id) = &new.channel_id else {
+                // Also caused by user leaving to another guild
                 warn!(
                     guild_id = guild_id.get(),
                     user_id = new.user_id.get(),
@@ -528,10 +508,7 @@ impl EventHandler for Handler {
                 break 'inc;
             };
 
-            let Ok((category, channel)) = self.category_channel(&ctx, channel_id).await else {
-                warn!(guild_id=guild_id.get(), channel_id=channel_id.get(), "failed to new get category and channel, this might cause inconsistencies in the metrics");
-                break 'inc;
-            };
+            let (category, channel) = self.category_channel(&ctx, &guild_id, channel_id).await;
 
             // Handle `member_voice` metric
             self.metrics_handler
