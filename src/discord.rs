@@ -40,42 +40,32 @@ impl Handler {
             users: RwLock::new(HashMap::new()),
         }
     }
+}
 
-    /// Gets the root category and channel for a channel (any kind).
-    async fn category_channel(
-        &self,
-        ctx: &Context,
-        channel_id: &ChannelId,
-    ) -> Result<(Option<GuildChannel>, GuildChannel), serenity::Error> {
-        let mut channel = channel_id
-            .to_channel(&ctx.http)
-            .await?
-            .guild()
-            .expect("channel is not part of a guild");
+/// Gets the root category and channel for a guild channel. It expects all relevant items to be cached.
+fn category_channel(
+    ctx: &Context,
+    guild_id: GuildId,
+    channel_id: ChannelId,
+) -> (Option<GuildChannel>, GuildChannel) {
+    // Get base
+    let guild = ctx.cache.guild(guild_id).expect("Guild not found");
+    let mut channel = &guild.channels[&channel_id];
 
-        // Handle category
-        let Some(parent_id) = channel.parent_id else {
-            return Ok((None, channel));
-        };
-        let category = parent_id
-            .to_channel(&ctx.http)
-            .await?
-            .guild()
-            .expect("channel is not part of a guild");
+    // Handle category
+    let Some(parent_id) = channel.parent_id else {
+        return (None, channel.clone());
+    };
+    let category = &guild.channels[&parent_id];
 
-        // Handle thread
-        let Some(parent_id) = category.parent_id else {
-            return Ok((Some(category), channel));
-        };
-        channel = category;
-        let category = parent_id
-            .to_channel(&ctx.http)
-            .await?
-            .guild()
-            .expect("channel is not part of a guild");
+    // Handle thread
+    let Some(parent_id) = category.parent_id else {
+        return (Some(category.clone()), channel.clone());
+    };
+    channel = category;
+    let category = &guild.channels[&parent_id];
 
-        Ok((Some(category), channel))
-    }
+    (Some(category.clone()), channel.clone())
 }
 
 #[async_trait]
@@ -184,10 +174,7 @@ impl EventHandler for Handler {
         // Handle `member_voice` metric
         for (_, voice) in guild.voice_states {
             if let Some(channel_id) = &voice.channel_id {
-                let Ok((category, channel)) = self.category_channel(&ctx, channel_id).await else {
-                    warn!(guild_id=guild.id.get(), channel_id=channel_id.get(), "failed to get category and channel, this might cause inconsistencies in the metrics!");
-                    return;
-                };
+                let (category, channel) = category_channel(&ctx, guild.id, *channel_id);
                 self.metrics_handler
                     .member_voice
                     .get_or_create(&MemberVoiceLabels {
@@ -323,10 +310,7 @@ impl EventHandler for Handler {
             return;
         }
 
-        let Ok((category, channel)) = self.category_channel(&ctx, &msg.channel_id).await else {
-            warn!(guild_id=guild_id.get(), channel_id=msg.channel_id.get(), "failed to get category and channel, this might cause inconsistencies in the metrics!");
-            return;
-        };
+        let (category, channel) = category_channel(&ctx, guild_id, msg.channel_id);
 
         // Handle `message_sent` metric
         self.metrics_handler
@@ -382,11 +366,7 @@ impl EventHandler for Handler {
             return;
         };
 
-        let Ok((category, channel)) = self.category_channel(&ctx, &add_reaction.channel_id).await
-        else {
-            warn!(guild_id=guild_id.get(), channel_id=add_reaction.channel_id.get(), "failed to get category and channel, this might cause inconsistencies in the metrics!");
-            return;
-        };
+        let (category, channel) = category_channel(&ctx, guild_id, add_reaction.channel_id);
 
         // Handle `emote_used` metric
         self.metrics_handler
@@ -472,39 +452,62 @@ impl EventHandler for Handler {
             // Only tracks guild events
             return;
         };
-        info!(guild_id = guild_id.get(), "Voice state update");
+        info!(
+            guild_id = guild_id.get(),
+            has_cached = old.is_some(),
+            "Voice state update"
+        );
 
         // Decrement gauges for previous state if cached
-        if let Some(old) = old {
-            if let Some(channel_id) = &old.channel_id {
-                let Ok((category, channel)) = self.category_channel(&ctx, channel_id).await else {
-                    warn!(guild_id=guild_id.get(), channel_id=channel_id.get(), "failed to get category and channel, this might cause inconsistencies in the metrics!");
-                    return;
-                };
+        'dec: {
+            let Some(old) = old else {
+                break 'dec;
+            };
 
-                // Handle `member_voice` metric (decrement)
-                self.metrics_handler
-                    .member_voice
-                    .get_or_create(&MemberVoiceLabels {
-                        guild_id: guild_id.into(),
-                        category_id: category.as_ref().map(|ch| ch.id.into()),
-                        category_name: category.as_ref().map(|ch| ch.name.clone()),
-                        channel_id: channel.id.into(),
-                        channel_name: channel.name.clone(),
-                        self_stream: old.self_stream.unwrap_or(false).into(),
-                        self_video: old.self_video.into(),
-                        self_deaf: old.self_deaf.into(),
-                        self_mute: old.self_mute.into(),
-                    })
-                    .dec();
-            }
+            // Get channel and category
+            let Some(channel_id) = &old.channel_id else {
+                // Also caused by user leaving to another guild
+                warn!(
+                    guild_id = guild_id.get(),
+                    user_id = old.user_id.get(),
+                    "failed to get old channel, this might cause inconsistencies in the metrics"
+                );
+                break 'dec;
+            };
+
+            let (category, channel) = category_channel(&ctx, guild_id, *channel_id);
+
+            // Handle `member_voice` metric (decrement)
+            self.metrics_handler
+                .member_voice
+                .get_or_create(&MemberVoiceLabels {
+                    guild_id: guild_id.into(),
+                    category_id: category.as_ref().map(|ch| ch.id.into()),
+                    category_name: category.as_ref().map(|ch| ch.name.clone()),
+                    channel_id: channel.id.into(),
+                    channel_name: channel.name.clone(),
+                    self_stream: old.self_stream.unwrap_or(false).into(),
+                    self_video: old.self_video.into(),
+                    self_deaf: old.self_deaf.into(),
+                    self_mute: old.self_mute.into(),
+                })
+                .dec();
         }
 
-        if let Some(channel_id) = &new.channel_id {
-            let Ok((category, channel)) = self.category_channel(&ctx, channel_id).await else {
-                warn!(guild_id=guild_id.get(), channel_id=channel_id.get(), "failed to get category and channel, this might cause inconsistencies in the metrics!");
-                return;
+        // Increment gauges for new state
+        'inc: {
+            // Get channel and category
+            let Some(channel_id) = &new.channel_id else {
+                // Also caused by user leaving to another guild
+                warn!(
+                    guild_id = guild_id.get(),
+                    user_id = new.user_id.get(),
+                    "failed to get new channel, this might cause inconsistencies in the metrics"
+                );
+                break 'inc;
             };
+
+            let (category, channel) = category_channel(&ctx, guild_id, *channel_id);
 
             // Handle `member_voice` metric
             self.metrics_handler
