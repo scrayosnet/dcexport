@@ -15,17 +15,18 @@ requirements.
 dcexport provides the following metrics. Every metric uses the label `guild_id` to differentiate the different guilds.
 For more detailed information about the metrics and their labels, see the [source code](./src/metrics.rs).
 
-| Name          | Description                                                                   | Type    |
-|---------------|-------------------------------------------------------------------------------|---------|
-| guild         | The number of guilds handled by the exporter.                                 | Gauge   |
-| message_sent  | The total number of discord messages sent by guild members.                   | Counter |
-| emote_used    | The total number of discord emotes reacted with by guild members in messages. | Counter |
-| activity      | The number of current activities.                                             | Gauge   |
-| member        | The number of members (including bots) on the guild.                          | Gauge   |
-| bot           | The number of bot members on the guild.                                       | Gauge   |
-| member_status | The number of members on the guild per status.                                | Gauge   |
-| member_voice  | The number of members in voice channels.                                      | Gauge   |
-| boost         | The number of boosts active on the guild.                                     | Gauge   |
+| Name          | Description                                                                               | Type    |
+|---------------|-------------------------------------------------------------------------------------------|---------|
+| guild         | The number of guilds handled by the exporter.                                             | Gauge   |
+| message_sent  | The total number of discord messages sent by guild members.                               | Counter |
+| emote_used    | The total number of discord emotes reacted with by guild members in messages.             | Counter |
+| activity      | The number of current activities.                                                         | Gauge   |
+| member        | The number of members (including bots) on the guild.                                      | Gauge   |
+| bot           | The number of bot members on the guild.                                                   | Gauge   |
+| member_status | The number of members on the guild per status.                                            | Gauge   |
+| member_voice  | The number of members in voice channels.                                                  | Gauge   |
+| boost         | The number of boosts active on the guild.                                                 | Gauge   |
+| channel       | The number of channels on the guild. Used for injecting channel names into other metrics. | Gauge   |
 
 
 ## Getting Started
