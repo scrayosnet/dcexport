@@ -70,38 +70,78 @@ fn category_channel(
 
 #[async_trait]
 impl EventHandler for Handler {
+    async fn channel_create(&self, _ctx: Context, channel: GuildChannel) {
+        info!(
+            guild_id = channel.guild_id.get(),
+            channel_id = channel.id.get(),
+            "Channel create"
+        );
+
+        self.metrics_handler
+            .channel
+            .get_or_create(&ChannelLabels::new(&channel))
+            .set(1);
+    }
+
+    async fn channel_delete(
+        &self,
+        _ctx: Context,
+        channel: GuildChannel,
+        _messages: Option<Vec<Message>>,
+    ) {
+        info!(
+            guild_id = channel.guild_id.get(),
+            channel_id = channel.id.get(),
+            "Channel delete"
+        );
+
+        self.metrics_handler
+            .channel
+            .remove(&ChannelLabels::new(&channel));
+    }
+
+    async fn channel_update(&self, _ctx: Context, old: Option<GuildChannel>, new: GuildChannel) {
+        info!(
+            guild_id = new.guild_id.get(),
+            channel_id = new.id.get(),
+            "Channel update"
+        );
+
+        // Decrement old if available
+        if let Some(old) = old {
+            self.metrics_handler
+                .channel
+                .remove(&ChannelLabels::new(&old));
+        }
+
+        // Increment new
+        self.metrics_handler
+            .channel
+            .get_or_create(&ChannelLabels::new(&new))
+            .set(1);
+    }
+
     async fn guild_create(&self, ctx: Context, guild: Guild, _is_new: Option<bool>) {
         info!(guild_id = guild.id.get(), "Guild create");
 
         // Handle `guild` metric
         self.metrics_handler
             .guild
-            .get_or_create(&GuildsLabels {
-                guild_id: guild.id.into(),
-                guild_name: guild.name.clone(),
-            })
+            .get_or_create(&GuildsLabels::new(&guild))
             .set(1);
 
         // Handle `channel` metric
         for channel in guild.channels.values() {
             self.metrics_handler
                 .channel
-                .get_or_create(&ChannelLabels {
-                    guild_id: guild.id.get(),
-                    channel_id: channel.id.get(),
-                    channel_name: channel.name.clone(),
-                    channel_nsfw: channel.nsfw.into(),
-                    channel_type: channel.kind.name().to_string(),
-                })
+                .get_or_create(&ChannelLabels::new(channel))
                 .set(1);
         }
 
         // Handle `boost` metric
         self.metrics_handler
             .boost
-            .get_or_create(&BoostLabels {
-                guild_id: guild.id.into(),
-            })
+            .get_or_create(&BoostLabels::new(guild.id))
             .set(
                 guild
                     .premium_subscription_count
@@ -113,9 +153,7 @@ impl EventHandler for Handler {
         // Handle `member` metric
         self.metrics_handler
             .member
-            .get_or_create(&MemberLabels {
-                guild_id: guild.id.into(),
-            })
+            .get_or_create(&MemberLabels::new(guild.id))
             .set(
                 guild
                     .member_count
@@ -129,16 +167,12 @@ impl EventHandler for Handler {
             let Ok(members) = guild.members(&ctx.http, None, members_after).await else {
                 warn!(guild_id = guild.id.get(), "Failed to count guild bots");
                 // Remove metric to indicate no bots were counted (successfully)
-                self.metrics_handler.bot.remove(&BotLabels {
-                    guild_id: guild.id.into(),
-                });
+                self.metrics_handler.bot.remove(&BotLabels::new(guild.id));
                 break;
             };
             self.metrics_handler
                 .bot
-                .get_or_create(&BotLabels {
-                    guild_id: guild.id.into(),
-                })
+                .get_or_create(&BotLabels::new(guild.id))
                 .inc_by(
                     members
                         .iter()
@@ -159,21 +193,14 @@ impl EventHandler for Handler {
             // Handle `member_status` metric
             self.metrics_handler
                 .member_status
-                .get_or_create(&MemberStatusLabels {
-                    guild_id: guild.id.into(),
-                    status: presence.status.name().to_string(),
-                })
+                .get_or_create(&MemberStatusLabels::new(guild.id, presence.status))
                 .inc();
 
             // Handle `activity` metric
             for activity in &presence.activities {
                 self.metrics_handler
                     .activity
-                    .get_or_create(&ActivityLabels {
-                        guild_id: guild.id.into(),
-                        activity_application_id: activity.application_id.map(Into::into),
-                        activity_name: activity.name.clone(),
-                    })
+                    .get_or_create(&ActivityLabels::new(guild.id, activity))
                     .inc();
             }
 
@@ -187,54 +214,20 @@ impl EventHandler for Handler {
         }
 
         // Handle `member_voice` metric
-        for (_, voice) in guild.voice_states {
+        for voice in guild.voice_states.values() {
             if let Some(channel_id) = &voice.channel_id {
-                let (category, channel) = category_channel(&ctx, guild.id, *channel_id);
+                let (category_id, channel_id) = category_channel(&ctx, guild.id, *channel_id);
                 self.metrics_handler
                     .member_voice
-                    .get_or_create(&MemberVoiceLabels {
-                        guild_id: guild.id.into(),
-                        category_id: category.as_ref().map(|ch| ch.get()),
-                        channel_id: channel.into(),
-                        self_stream: voice.self_stream.unwrap_or(false).into(),
-                        self_video: voice.self_video.into(),
-                        self_deaf: voice.self_deaf.into(),
-                        self_mute: voice.self_mute.into(),
-                    })
+                    .get_or_create(&MemberVoiceLabels::new(
+                        guild.id,
+                        category_id,
+                        channel_id,
+                        voice,
+                    ))
                     .inc();
             }
         }
-    }
-
-    async fn guild_update(
-        &self,
-        _ctx: Context,
-        old_data_if_available: Option<Guild>,
-        new_data: PartialGuild,
-    ) {
-        info!(guild_id = new_data.id.get(), "Guild Update");
-
-        // Handle `guild` metric
-        if let Some(guild) = old_data_if_available {
-            self.metrics_handler.guild.remove(&GuildsLabels {
-                guild_id: guild.id.into(),
-                guild_name: guild.name,
-            });
-        }
-
-        // Handle `boost` metric
-        self.metrics_handler
-            .boost
-            .get_or_create(&BoostLabels {
-                guild_id: new_data.id.into(),
-            })
-            .set(
-                new_data
-                    .premium_subscription_count
-                    .unwrap_or(0)
-                    .try_into()
-                    .expect("expected to fit in i64"),
-            );
     }
 
     async fn guild_delete(&self, ctx: Context, incomplete: UnavailableGuild, full: Option<Guild>) {
@@ -249,53 +242,41 @@ impl EventHandler for Handler {
         };
 
         // Handle `guild` metric
-        self.metrics_handler.guild.remove(&GuildsLabels {
-            guild_id: incomplete.id.into(),
-            guild_name: guild.name,
-        });
+        self.metrics_handler
+            .guild
+            .remove(&GuildsLabels::new(&guild));
 
         // Handle `channel` metric
         for channel in guild.channels.values() {
-            self.metrics_handler.channel.remove(&ChannelLabels {
-                guild_id: guild.id.get(),
-                channel_id: channel.id.get(),
-                channel_name: channel.name.clone(),
-                channel_nsfw: channel.nsfw.into(),
-                channel_type: channel.kind.name().to_string(),
-            });
+            self.metrics_handler
+                .channel
+                .remove(&ChannelLabels::new(channel));
         }
 
         // Handle `boost` metric
-        self.metrics_handler.boost.remove(&BoostLabels {
-            guild_id: guild.id.into(),
-        });
+        self.metrics_handler
+            .boost
+            .remove(&BoostLabels::new(guild.id));
 
         // Handle `member` metric
-        self.metrics_handler.member.remove(&MemberLabels {
-            guild_id: guild.id.into(),
-        });
+        self.metrics_handler
+            .member
+            .remove(&MemberLabels::new(guild.id));
 
         // Handle `bot` metric
-        self.metrics_handler.bot.remove(&BotLabels {
-            guild_id: incomplete.id.into(),
-        });
+        self.metrics_handler.bot.remove(&BotLabels::new(guild.id));
 
         for (user_id, presence) in &guild.presences {
             // Handle `member_status` metric
             self.metrics_handler
                 .member_status
-                .remove(&MemberStatusLabels {
-                    guild_id: guild.id.into(),
-                    status: presence.status.name().to_string(),
-                });
+                .remove(&MemberStatusLabels::new(guild.id, presence.status));
 
             // Handle `activity` metric
             for activity in &presence.activities {
-                self.metrics_handler.activity.remove(&ActivityLabels {
-                    guild_id: guild.id.into(),
-                    activity_application_id: activity.application_id.map(Into::into),
-                    activity_name: activity.name.clone(),
-                });
+                self.metrics_handler
+                    .activity
+                    .remove(&ActivityLabels::new(guild.id, activity));
             }
 
             // remove user presences from handler cache
@@ -303,93 +284,19 @@ impl EventHandler for Handler {
         }
 
         // Handle `member_voice` metric
-        for (_, voice) in guild.voice_states {
+        for voice in guild.voice_states.values() {
             if let Some(channel_id) = &voice.channel_id {
-                let (category, channel) = category_channel(&ctx, guild.id, *channel_id);
+                let (category_id, channel_id) = category_channel(&ctx, guild.id, *channel_id);
                 self.metrics_handler
                     .member_voice
-                    .remove(&MemberVoiceLabels {
-                        guild_id: guild.id.into(),
-                        category_id: category.as_ref().map(|ch| ch.get()),
-                        channel_id: channel.into(),
-                        self_stream: voice.self_stream.unwrap_or(false).into(),
-                        self_video: voice.self_video.into(),
-                        self_deaf: voice.self_deaf.into(),
-                        self_mute: voice.self_mute.into(),
-                    });
+                    .remove(&MemberVoiceLabels::new(
+                        guild.id,
+                        category_id,
+                        channel_id,
+                        voice,
+                    ));
             }
         }
-    }
-
-    async fn channel_create(&self, _ctx: Context, channel: GuildChannel) {
-        info!(
-            guild_id = channel.guild_id.get(),
-            channel_id = channel.id.get(),
-            "Channel create"
-        );
-
-        self.metrics_handler
-            .channel
-            .get_or_create(&ChannelLabels {
-                guild_id: channel.guild_id.get(),
-                channel_id: channel.id.get(),
-                channel_name: channel.name.clone(),
-                channel_nsfw: channel.nsfw.into(),
-                channel_type: channel.kind.name().to_string(),
-            })
-            .set(1);
-    }
-
-    async fn channel_update(&self, _ctx: Context, old: Option<GuildChannel>, new: GuildChannel) {
-        info!(
-            guild_id = new.guild_id.get(),
-            channel_id = new.id.get(),
-            "Channel update"
-        );
-
-        // Decrement old if available
-        if let Some(old) = old {
-            self.metrics_handler.channel.remove(&ChannelLabels {
-                guild_id: old.guild_id.get(),
-                channel_id: old.id.get(),
-                channel_name: old.name.clone(),
-                channel_nsfw: old.nsfw.into(),
-                channel_type: old.kind.name().to_string(),
-            });
-        }
-
-        // Increment new
-        self.metrics_handler
-            .channel
-            .get_or_create(&ChannelLabels {
-                guild_id: new.guild_id.get(),
-                channel_id: new.id.get(),
-                channel_name: new.name.clone(),
-                channel_nsfw: new.nsfw.into(),
-                channel_type: new.kind.name().to_string(),
-            })
-            .set(1);
-    }
-
-    async fn channel_delete(
-        &self,
-        _ctx: Context,
-        channel: GuildChannel,
-        _messages: Option<Vec<Message>>,
-    ) {
-        info!(
-            guild_id = channel.guild_id.get(),
-            channel_id = channel.id.get(),
-            "Channel delete"
-        );
-
-        self.metrics_handler.channel.remove(&ChannelLabels {
-            guild_id: channel.guild_id.get(),
-            channel_id: channel.id.get(),
-            channel_name: channel.name.clone(),
-            channel_nsfw: channel.nsfw.into(),
-            channel_type: channel.kind.name().to_string(),
-        });
     }
 
     async fn guild_member_addition(&self, _ctx: Context, new_member: Member) {
@@ -402,18 +309,14 @@ impl EventHandler for Handler {
         // Handle `member` metric
         self.metrics_handler
             .member
-            .get_or_create(&MemberLabels {
-                guild_id: new_member.guild_id.into(),
-            })
+            .get_or_create(&MemberLabels::new(new_member.guild_id))
             .inc();
 
         // Handle `bot` metric
         if new_member.user.bot {
             self.metrics_handler
                 .bot
-                .get_or_create(&BotLabels {
-                    guild_id: new_member.guild_id.into(),
-                })
+                .get_or_create(&BotLabels::new(new_member.guild_id))
                 .inc();
         }
     }
@@ -434,20 +337,44 @@ impl EventHandler for Handler {
         // Handle `member` metric
         self.metrics_handler
             .member
-            .get_or_create(&MemberLabels {
-                guild_id: guild_id.into(),
-            })
+            .get_or_create(&MemberLabels::new(guild_id))
             .dec();
 
         // Handle `bot` metric
         if user.bot {
             self.metrics_handler
                 .bot
-                .get_or_create(&BotLabels {
-                    guild_id: guild_id.into(),
-                })
+                .get_or_create(&BotLabels::new(guild_id))
                 .dec();
         }
+    }
+
+    async fn guild_update(
+        &self,
+        _ctx: Context,
+        old_data_if_available: Option<Guild>,
+        new_data: PartialGuild,
+    ) {
+        info!(guild_id = new_data.id.get(), "Guild Update");
+
+        // Handle `guild` metric
+        if let Some(guild) = old_data_if_available {
+            self.metrics_handler
+                .guild
+                .remove(&GuildsLabels::new(&guild));
+        }
+
+        // Handle `boost` metric
+        self.metrics_handler
+            .boost
+            .get_or_create(&BoostLabels::new(new_data.id))
+            .set(
+                new_data
+                    .premium_subscription_count
+                    .unwrap_or(0)
+                    .try_into()
+                    .expect("expected to fit in i64"),
+            );
     }
 
     async fn message(&self, ctx: Context, msg: Message) {
@@ -462,16 +389,12 @@ impl EventHandler for Handler {
             return;
         }
 
-        let (category, channel) = category_channel(&ctx, guild_id, msg.channel_id);
+        let (category_id, channel_id) = category_channel(&ctx, guild_id, msg.channel_id);
 
         // Handle `message_sent` metric
         self.metrics_handler
             .message_sent
-            .get_or_create(&MessageSentLabels {
-                guild_id: guild_id.into(),
-                category_id: category.as_ref().map(|ch| ch.get()),
-                channel_id: channel.into(),
-            })
+            .get_or_create(&MessageSentLabels::new(guild_id, category_id, channel_id))
             .inc();
 
         // Handle `emote_used` metric
@@ -483,14 +406,14 @@ impl EventHandler for Handler {
 
             self.metrics_handler
                 .emote_used
-                .get_or_create(&EmoteUsedLabels {
-                    guild_id: guild_id.into(),
-                    category_id: category.as_ref().map(|ch| ch.get()),
-                    channel_id: channel.into(),
-                    reaction: false.into(),
-                    emoji_id: emoji.id.into(),
-                    emoji_name: Some(emoji.name),
-                })
+                .get_or_create(&EmoteUsedLabels::new(
+                    guild_id,
+                    category_id,
+                    channel_id,
+                    false,
+                    emoji.id,
+                    Some(emoji.name),
+                ))
                 .inc();
         }
     }
@@ -514,19 +437,19 @@ impl EventHandler for Handler {
             return;
         };
 
-        let (category, channel) = category_channel(&ctx, guild_id, add_reaction.channel_id);
+        let (category_id, channel_id) = category_channel(&ctx, guild_id, add_reaction.channel_id);
 
         // Handle `emote_used` metric
         self.metrics_handler
             .emote_used
-            .get_or_create(&EmoteUsedLabels {
-                guild_id: guild_id.into(),
-                category_id: category.as_ref().map(|ch| ch.get()),
-                channel_id: channel.into(),
-                reaction: true.into(),
-                emoji_id: id.into(),
-                emoji_name: name,
-            })
+            .get_or_create(&EmoteUsedLabels::new(
+                guild_id,
+                category_id,
+                channel_id,
+                true,
+                id,
+                name,
+            ))
             .inc();
     }
 
@@ -546,21 +469,17 @@ impl EventHandler for Handler {
             // Handle `member_status` metric (decrement)
             self.metrics_handler
                 .member_status
-                .get_or_create(&MemberStatusLabels {
-                    guild_id: guild_id.into(),
-                    status: cached_user.presence.status.name().to_string(),
-                })
+                .get_or_create(&MemberStatusLabels::new(
+                    guild_id,
+                    cached_user.presence.status,
+                ))
                 .dec();
 
             // Handle `activity` metric (decrement)
             for activity in &cached_user.presence.activities {
                 self.metrics_handler
                     .activity
-                    .get_or_create(&ActivityLabels {
-                        guild_id: guild_id.into(),
-                        activity_application_id: activity.application_id.map(Into::into),
-                        activity_name: activity.name.clone(),
-                    })
+                    .get_or_create(&ActivityLabels::new(guild_id, activity))
                     .dec();
             }
         }
@@ -568,21 +487,14 @@ impl EventHandler for Handler {
         // Handle `member_status` metric
         self.metrics_handler
             .member_status
-            .get_or_create(&MemberStatusLabels {
-                guild_id: guild_id.into(),
-                status: new_data.status.name().to_string(),
-            })
+            .get_or_create(&MemberStatusLabels::new(guild_id, new_data.status))
             .inc();
 
         // Handle `activity` metric
         for activity in &new_data.activities {
             self.metrics_handler
                 .activity
-                .get_or_create(&ActivityLabels {
-                    guild_id: guild_id.into(),
-                    activity_application_id: activity.application_id.map(Into::into),
-                    activity_name: activity.name.clone(),
-                })
+                .get_or_create(&ActivityLabels::new(guild_id, activity))
                 .inc();
         }
 
@@ -621,20 +533,17 @@ impl EventHandler for Handler {
                 break 'dec;
             };
 
-            let (category, channel) = category_channel(&ctx, guild_id, *channel_id);
+            let (category_id, channel_id) = category_channel(&ctx, guild_id, *channel_id);
 
             // Handle `member_voice` metric (decrement)
             self.metrics_handler
                 .member_voice
-                .get_or_create(&MemberVoiceLabels {
-                    guild_id: guild_id.into(),
-                    category_id: category.as_ref().map(|ch| ch.get()),
-                    channel_id: channel.into(),
-                    self_stream: old.self_stream.unwrap_or(false).into(),
-                    self_video: old.self_video.into(),
-                    self_deaf: old.self_deaf.into(),
-                    self_mute: old.self_mute.into(),
-                })
+                .get_or_create(&MemberVoiceLabels::new(
+                    guild_id,
+                    category_id,
+                    channel_id,
+                    &old,
+                ))
                 .dec();
         }
 
@@ -651,20 +560,17 @@ impl EventHandler for Handler {
                 break 'inc;
             };
 
-            let (category, channel) = category_channel(&ctx, guild_id, *channel_id);
+            let (category_id, channel_id) = category_channel(&ctx, guild_id, *channel_id);
 
             // Handle `member_voice` metric
             self.metrics_handler
                 .member_voice
-                .get_or_create(&MemberVoiceLabels {
-                    guild_id: guild_id.into(),
-                    category_id: category.as_ref().map(|ch| ch.get()),
-                    channel_id: channel.into(),
-                    self_stream: new.self_stream.unwrap_or(false).into(),
-                    self_video: new.self_video.into(),
-                    self_deaf: new.self_deaf.into(),
-                    self_mute: new.self_mute.into(),
-                })
+                .get_or_create(&MemberVoiceLabels::new(
+                    guild_id,
+                    category_id,
+                    channel_id,
+                    &new,
+                ))
                 .inc();
         }
     }

@@ -12,6 +12,10 @@ use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
 use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::registry::Registry;
+use serenity::all::{
+    Activity, ApplicationId, ChannelId, EmojiId, Guild, GuildChannel, GuildId, OnlineStatus,
+    VoiceState,
+};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
@@ -57,6 +61,16 @@ pub struct GuildsLabels {
     pub guild_name: String,
 }
 
+impl GuildsLabels {
+    /// Creates a new instance of [`GuildsLabels`].
+    pub fn new(guild: &Guild) -> Self {
+        Self {
+            guild_id: guild.id.get(),
+            guild_name: guild.name.clone(),
+        }
+    }
+}
+
 /// [`ChannelLabels`] are the [labels](EncodeLabelSet) for the `channel` metric.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub struct ChannelLabels {
@@ -67,16 +81,47 @@ pub struct ChannelLabels {
     pub channel_type: String,
 }
 
+impl ChannelLabels {
+    /// Creates a new instance of [`ChannelLabels`].
+    pub fn new(channel: &GuildChannel) -> Self {
+        Self {
+            guild_id: channel.guild_id.get(),
+            channel_id: channel.id.get(),
+            channel_name: channel.name.clone(),
+            channel_nsfw: Boolean(channel.nsfw),
+            channel_type: channel.kind.name().to_string(),
+        }
+    }
+}
+
 /// [`BoostLabels`] are the [labels](EncodeLabelSet) for the `boost` metric.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub struct BoostLabels {
     pub guild_id: u64,
 }
 
+impl BoostLabels {
+    /// Creates a new instance of [`BoostLabels`].
+    pub fn new(guild_id: GuildId) -> Self {
+        Self {
+            guild_id: guild_id.get(),
+        }
+    }
+}
+
 /// [`MemberLabels`] are the [labels](EncodeLabelSet) for the `member` metric.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub struct MemberLabels {
     pub guild_id: u64,
+}
+
+impl MemberLabels {
+    /// Creates a new instance of [`MemberLabels`].
+    pub fn new(guild_id: GuildId) -> Self {
+        Self {
+            guild_id: guild_id.get(),
+        }
+    }
 }
 
 /// [`BotLabels`] are the [labels](EncodeLabelSet) for the `bot` metric.
@@ -89,11 +134,30 @@ pub struct BotLabels {
     pub guild_id: u64,
 }
 
+impl BotLabels {
+    /// Creates a new instance of [`BotLabels`].
+    pub fn new(guild_id: GuildId) -> Self {
+        Self {
+            guild_id: guild_id.get(),
+        }
+    }
+}
+
 /// [`MemberStatusLabels`] are the [labels](EncodeLabelSet) for the `member_status` metric.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub struct MemberStatusLabels {
     pub guild_id: u64,
     pub status: String,
+}
+
+impl MemberStatusLabels {
+    /// Creates a new instance of [`MemberStatusLabels`].
+    pub fn new(guild_id: GuildId, status: OnlineStatus) -> Self {
+        Self {
+            guild_id: guild_id.get(),
+            status: status.name().to_string(),
+        }
+    }
 }
 
 /// [`MemberVoiceLabels`] are the [labels](EncodeLabelSet) for the `member_voice` metric.
@@ -108,6 +172,26 @@ pub struct MemberVoiceLabels {
     pub self_mute: Boolean,
 }
 
+impl MemberVoiceLabels {
+    /// Creates a new instance of [`MemberVoiceLabels`].
+    pub fn new(
+        guild_id: GuildId,
+        category_id: Option<ChannelId>,
+        channel_id: ChannelId,
+        voice: &VoiceState,
+    ) -> Self {
+        Self {
+            guild_id: guild_id.get(),
+            category_id: category_id.map(ChannelId::get),
+            channel_id: channel_id.get(),
+            self_stream: voice.self_stream.unwrap_or(false).into(),
+            self_video: voice.self_video.into(),
+            self_deaf: voice.self_deaf.into(),
+            self_mute: voice.self_mute.into(),
+        }
+    }
+}
+
 /// [`MessageSentLabels`] are the [labels](EncodeLabelSet) for the `message_sent` metric.
 #[allow(clippy::struct_field_names)]
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
@@ -115,6 +199,17 @@ pub struct MessageSentLabels {
     pub guild_id: u64,
     pub category_id: Option<u64>,
     pub channel_id: u64,
+}
+
+impl MessageSentLabels {
+    /// Creates a new instance of [`MessageSentLabels`].
+    pub fn new(guild_id: GuildId, category_id: Option<ChannelId>, channel_id: ChannelId) -> Self {
+        Self {
+            guild_id: guild_id.get(),
+            category_id: category_id.map(ChannelId::get),
+            channel_id: channel_id.get(),
+        }
+    }
 }
 
 /// [`EmoteUsedLabels`] are the [labels](EncodeLabelSet) for the `emote_used` metric.
@@ -128,12 +223,44 @@ pub struct EmoteUsedLabels {
     pub emoji_name: Option<String>,
 }
 
+impl EmoteUsedLabels {
+    /// Creates a new instance of [`EmoteUsedLabels`].
+    pub fn new(
+        guild_id: GuildId,
+        category_id: Option<ChannelId>,
+        channel_id: ChannelId,
+        reaction: bool,
+        emoji_id: EmojiId,
+        emoji_name: Option<String>,
+    ) -> Self {
+        Self {
+            guild_id: guild_id.get(),
+            category_id: category_id.map(ChannelId::get),
+            channel_id: channel_id.get(),
+            reaction: Boolean(reaction),
+            emoji_id: emoji_id.get(),
+            emoji_name,
+        }
+    }
+}
+
 /// [`ActivityLabels`] are the [labels](EncodeLabelSet) for the `activity` metric.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub struct ActivityLabels {
     pub guild_id: u64,
     pub activity_application_id: Option<u64>,
     pub activity_name: String,
+}
+
+impl ActivityLabels {
+    /// Creates a new instance of [`ActivityLabels`].
+    pub fn new(guild_id: GuildId, activity: &Activity) -> Self {
+        Self {
+            guild_id: guild_id.get(),
+            activity_application_id: activity.application_id.map(ApplicationId::get),
+            activity_name: activity.name.clone(),
+        }
+    }
 }
 
 /// Handler is the [servable](serve) bundle of metrics for the exporter.
