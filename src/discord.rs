@@ -354,7 +354,7 @@ impl EventHandler for Handler {
             .get_or_create(&MemberLabels {
                 guild_id: guild_id.into(),
             })
-            .inc();
+            .dec();
 
         // Handle `bot` metric
         if user.bot {
