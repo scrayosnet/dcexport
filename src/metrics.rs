@@ -54,6 +54,7 @@ impl EncodeLabelValue for Boolean {
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub struct GuildsLabels {
     pub guild_id: u64,
+    pub guild_name: String,
 }
 
 /// [`ChannelLabels`] are the [labels](EncodeLabelSet) for the `channel` metric.

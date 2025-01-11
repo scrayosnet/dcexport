@@ -78,6 +78,7 @@ impl EventHandler for Handler {
             .guild
             .get_or_create(&GuildsLabels {
                 guild_id: guild.id.into(),
+                guild_name: guild.name.clone(),
             })
             .set(1);
 
@@ -205,31 +206,119 @@ impl EventHandler for Handler {
         }
     }
 
-    async fn guild_delete(
+    async fn guild_update(
         &self,
         _ctx: Context,
-        incomplete: UnavailableGuild,
-        _full: Option<Guild>,
+        old_data_if_available: Option<Guild>,
+        new_data: PartialGuild,
     ) {
-        info!(guild_id = incomplete.id.get(), "Guild delete");
+        info!(guild_id = new_data.id.get(), "Guild Update");
 
         // Handle `guild` metric
+        if let Some(guild) = old_data_if_available {
+            self.metrics_handler.guild.remove(&GuildsLabels {
+                guild_id: guild.id.into(),
+                guild_name: guild.name,
+            });
+        }
+
+        // Handle `boost` metric
         self.metrics_handler
-            .guild
-            .get_or_create(&GuildsLabels {
-                guild_id: incomplete.id.into(),
+            .boost
+            .get_or_create(&BoostLabels {
+                guild_id: new_data.id.into(),
             })
-            .set(0);
+            .set(
+                new_data
+                    .premium_subscription_count
+                    .unwrap_or(0)
+                    .try_into()
+                    .expect("expected to fit in i64"),
+            );
+    }
+
+    async fn guild_delete(&self, ctx: Context, incomplete: UnavailableGuild, full: Option<Guild>) {
+        info!(guild_id = incomplete.id.get(), "Guild delete");
+
+        let Some(guild) = full else {
+            warn!(
+                guild_id = incomplete.id.get(),
+                "failed to get guild from cache, this might cause inconsistencies in the metrics"
+            );
+            return;
+        };
+
+        // Handle `guild` metric
+        self.metrics_handler.guild.remove(&GuildsLabels {
+            guild_id: incomplete.id.into(),
+            guild_name: guild.name,
+        });
+
+        // Handle `channel` metric
+        for channel in guild.channels.values() {
+            self.metrics_handler.channel.remove(&ChannelLabels {
+                guild_id: guild.id.get(),
+                channel_id: channel.id.get(),
+                channel_name: channel.name.clone(),
+                channel_nsfw: channel.nsfw.into(),
+                channel_type: channel.kind.name().to_string(),
+            });
+        }
+
+        // Handle `boost` metric
+        self.metrics_handler.boost.remove(&BoostLabels {
+            guild_id: guild.id.into(),
+        });
+
+        // Handle `member` metric
+        self.metrics_handler.member.remove(&MemberLabels {
+            guild_id: guild.id.into(),
+        });
 
         // Handle `bot` metric
-        self.metrics_handler
-            .bot
-            .get_or_create(&BotLabels {
-                guild_id: incomplete.id.into(),
-            })
-            .set(0);
+        self.metrics_handler.bot.remove(&BotLabels {
+            guild_id: incomplete.id.into(),
+        });
 
-        // TODO handle other metrics as well! Consider syncing with guild_create "is_new"
+        for (user_id, presence) in &guild.presences {
+            // Handle `member_status` metric
+            self.metrics_handler
+                .member_status
+                .remove(&MemberStatusLabels {
+                    guild_id: guild.id.into(),
+                    status: presence.status.name().to_string(),
+                });
+
+            // Handle `activity` metric
+            for activity in &presence.activities {
+                self.metrics_handler.activity.remove(&ActivityLabels {
+                    guild_id: guild.id.into(),
+                    activity_application_id: activity.application_id.map(Into::into),
+                    activity_name: activity.name.clone(),
+                });
+            }
+
+            // remove user presences from handler cache
+            self.users.write().await.remove(&(guild.id, *user_id));
+        }
+
+        // Handle `member_voice` metric
+        for (_, voice) in guild.voice_states {
+            if let Some(channel_id) = &voice.channel_id {
+                let (category, channel) = category_channel(&ctx, guild.id, *channel_id);
+                self.metrics_handler
+                    .member_voice
+                    .remove(&MemberVoiceLabels {
+                        guild_id: guild.id.into(),
+                        category_id: category.as_ref().map(|ch| ch.get()),
+                        channel_id: channel.into(),
+                        self_stream: voice.self_stream.unwrap_or(false).into(),
+                        self_video: voice.self_video.into(),
+                        self_deaf: voice.self_deaf.into(),
+                        self_mute: voice.self_mute.into(),
+                    });
+            }
+        }
     }
 
     async fn channel_create(&self, _ctx: Context, channel: GuildChannel) {
@@ -297,16 +386,13 @@ impl EventHandler for Handler {
             "Channel delete"
         );
 
-        self.metrics_handler
-            .channel
-            .get_or_create(&ChannelLabels {
-                guild_id: channel.guild_id.get(),
-                channel_id: channel.id.get(),
-                channel_name: channel.name.clone(),
-                channel_nsfw: channel.nsfw.into(),
-                channel_type: channel.kind.name().to_string(),
-            })
-            .set(0);
+        self.metrics_handler.channel.remove(&ChannelLabels {
+            guild_id: channel.guild_id.get(),
+            channel_id: channel.id.get(),
+            channel_name: channel.name.clone(),
+            channel_nsfw: channel.nsfw.into(),
+            channel_type: channel.kind.name().to_string(),
+        });
     }
 
     async fn guild_member_addition(&self, _ctx: Context, new_member: Member) {
@@ -365,28 +451,6 @@ impl EventHandler for Handler {
                 })
                 .dec();
         }
-    }
-
-    async fn guild_update(
-        &self,
-        _ctx: Context,
-        _old_data_if_available: Option<Guild>,
-        new_data: PartialGuild,
-    ) {
-        info!(guild_id = new_data.id.get(), "Guild Update");
-
-        self.metrics_handler
-            .boost
-            .get_or_create(&BoostLabels {
-                guild_id: new_data.id.into(),
-            })
-            .set(
-                new_data
-                    .premium_subscription_count
-                    .unwrap_or(0)
-                    .try_into()
-                    .expect("expected to fit in i64"),
-            );
     }
 
     async fn message(&self, ctx: Context, msg: Message) {
