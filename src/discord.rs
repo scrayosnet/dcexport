@@ -349,16 +349,13 @@ impl EventHandler for Handler {
 
         // Decrement old if available
         if let Some(old) = old {
-            self.metrics_handler
-                .channel
-                .get_or_create(&ChannelLabels {
-                    guild_id: old.guild_id.get(),
-                    channel_id: old.id.get(),
-                    channel_name: old.name.clone(),
-                    channel_nsfw: old.nsfw.into(),
-                    channel_type: old.kind.name().to_string(),
-                })
-                .set(0);
+            self.metrics_handler.channel.remove(&ChannelLabels {
+                guild_id: old.guild_id.get(),
+                channel_id: old.id.get(),
+                channel_name: old.name.clone(),
+                channel_nsfw: old.nsfw.into(),
+                channel_type: old.kind.name().to_string(),
+            });
         }
 
         // Increment new
