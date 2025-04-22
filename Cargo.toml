@@ -1,7 +1,7 @@
 [package]
 name = "dcexport"
 description = "Discord Guild Prometheus Exporter"
-version = "0.1.0"
+version = "0.4.0"
 authors = [
     "Paul Wagner <github@paulwagner.dev>"
 ]
@@ -12,8 +12,8 @@ documentation = "https://github.com/scrayosnet/dcexport"
 homepage = "https://github.com/scrayosnet/dcexport"
 keywords = ["discord", "prometheus", "monitoring", "exporter"]
 categories = ["development-tools", "command-line-utilities"]
-edition = "2021"
-rust-version = "1.75.0"
+edition = "2024"
+rust-version = "1.85.0"
 
 [dependencies]
 prometheus-client = { version = "0.23" }
