@@ -1,8 +1,8 @@
 //! This module implements the metrics handler and its http server.
 
 use axum::body::Body;
-use axum::http::header::CONTENT_TYPE;
 use axum::http::StatusCode;
+use axum::http::header::CONTENT_TYPE;
 use axum::response::{Html, Response};
 use axum::routing::get;
 use axum::{Extension, Router};
