@@ -18,7 +18,7 @@ rust-version = "1.75.0"
 [dependencies]
 prometheus-client = { version = "0.23" }
 serenity = { version = "0.12" }
-tokio = { version = "1.43", features = ["macros", "rt-multi-thread", "signal"] }
+tokio = { version = "1.44", features = ["macros", "rt-multi-thread", "signal"] }
 tokio-util = { version = "0.7", features = ["rt"] }
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "tower-log", "tracing"] }
 tower-http = { version = "0.6", features = ["trace"] }

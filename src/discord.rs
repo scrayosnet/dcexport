@@ -16,7 +16,7 @@ use std::sync::Arc;
 use tokio::select;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info, instrument, warn};
+use tracing::{debug, error, info, instrument, warn};
 
 /// [`CachedUser`] is a bundle of information that should be cached. This cache is complementary to the
 /// build-in serenity cache. It contains information required to decrement the prometheus gauges.
@@ -29,7 +29,8 @@ pub struct CachedUser {
 /// updates the [metrics](metrics::Handler) accordingly.
 pub struct Handler {
     metrics_handler: Arc<metrics::Handler>,
-    users: RwLock<HashMap<(GuildId, UserId), CachedUser>>,
+    created: RwLock<bool>,
+    users: RwLock<HashMap<UserId, CachedUser>>,
 }
 
 impl Handler {
@@ -37,6 +38,7 @@ impl Handler {
     pub fn new(metrics_handler: Arc<metrics::Handler>) -> Self {
         Self {
             metrics_handler,
+            created: RwLock::new(false),
             users: RwLock::new(HashMap::new()),
         }
     }
@@ -124,6 +126,14 @@ impl EventHandler for Handler {
     async fn guild_create(&self, ctx: Context, guild: Guild, _is_new: Option<bool>) {
         info!(guild_id = guild.id.get(), "Guild create");
 
+        // clear metrics just in case
+        let mut created = self.created.write().await;
+        if *created {
+            error!("guild already created");
+            self.metrics_handler.clear();
+        }
+        *created = true;
+
         // Handle `guild` metric
         self.metrics_handler
             .guild
@@ -141,7 +151,7 @@ impl EventHandler for Handler {
         // Handle `boost` metric
         self.metrics_handler
             .boost
-            .get_or_create(&BoostLabels::new(guild.id))
+            .get_or_create(&BoostLabels::new())
             .set(
                 guild
                     .premium_subscription_count
@@ -153,7 +163,7 @@ impl EventHandler for Handler {
         // Handle `member` metric
         self.metrics_handler
             .member
-            .get_or_create(&MemberLabels::new(guild.id))
+            .get_or_create(&MemberLabels::new())
             .set(
                 guild
                     .member_count
@@ -167,12 +177,12 @@ impl EventHandler for Handler {
             let Ok(members) = guild.members(&ctx.http, None, members_after).await else {
                 warn!(guild_id = guild.id.get(), "Failed to count guild bots");
                 // Remove metric to indicate no bots were counted (successfully)
-                self.metrics_handler.bot.remove(&BotLabels::new(guild.id));
+                self.metrics_handler.bot.remove(&BotLabels::new());
                 break;
             };
             self.metrics_handler
                 .bot
-                .get_or_create(&BotLabels::new(guild.id))
+                .get_or_create(&BotLabels::new())
                 .inc_by(
                     members
                         .iter()
@@ -193,20 +203,20 @@ impl EventHandler for Handler {
             // Handle `member_status` metric
             self.metrics_handler
                 .member_status
-                .get_or_create(&MemberStatusLabels::new(guild.id, presence.status))
+                .get_or_create(&MemberStatusLabels::new(presence.status))
                 .inc();
 
             // Handle `activity` metric
             for activity in &presence.activities {
                 self.metrics_handler
                     .activity
-                    .get_or_create(&ActivityLabels::new(guild.id, activity))
+                    .get_or_create(&ActivityLabels::new(activity))
                     .inc();
             }
 
             // store user presences into handler cache such that the metrics can be decremented on the next presence update
             self.users.write().await.insert(
-                (guild.id, *user_id),
+                *user_id,
                 CachedUser {
                     presence: presence.clone(),
                 },
@@ -219,84 +229,27 @@ impl EventHandler for Handler {
                 let (category_id, channel_id) = category_channel(&ctx, guild.id, *channel_id);
                 self.metrics_handler
                     .member_voice
-                    .get_or_create(&MemberVoiceLabels::new(
-                        guild.id,
-                        category_id,
-                        channel_id,
-                        voice,
-                    ))
+                    .get_or_create(&MemberVoiceLabels::new(category_id, channel_id, voice))
                     .inc();
             }
         }
     }
 
-    async fn guild_delete(&self, ctx: Context, incomplete: UnavailableGuild, full: Option<Guild>) {
+    async fn guild_delete(
+        &self,
+        _ctx: Context,
+        incomplete: UnavailableGuild,
+        _full: Option<Guild>,
+    ) {
         info!(guild_id = incomplete.id.get(), "Guild delete");
 
-        let Some(guild) = full else {
-            warn!(
-                guild_id = incomplete.id.get(),
-                "failed to get guild from cache, this might cause inconsistencies in the metrics"
-            );
-            return;
-        };
-
-        // Handle `guild` metric
-        self.metrics_handler
-            .guild
-            .remove(&GuildsLabels::new(&guild));
-
-        // Handle `channel` metric
-        for channel in guild.channels.values() {
-            self.metrics_handler
-                .channel
-                .remove(&ChannelLabels::new(channel));
+        // clear all metrics to prevent inconsistencies (only supports a single guild)
+        let mut created = self.created.write().await;
+        if !*created {
+            error!("guild not created");
         }
-
-        // Handle `boost` metric
-        self.metrics_handler
-            .boost
-            .remove(&BoostLabels::new(guild.id));
-
-        // Handle `member` metric
-        self.metrics_handler
-            .member
-            .remove(&MemberLabels::new(guild.id));
-
-        // Handle `bot` metric
-        self.metrics_handler.bot.remove(&BotLabels::new(guild.id));
-
-        for (user_id, presence) in &guild.presences {
-            // Handle `member_status` metric
-            self.metrics_handler
-                .member_status
-                .remove(&MemberStatusLabels::new(guild.id, presence.status));
-
-            // Handle `activity` metric
-            for activity in &presence.activities {
-                self.metrics_handler
-                    .activity
-                    .remove(&ActivityLabels::new(guild.id, activity));
-            }
-
-            // remove user presences from handler cache
-            self.users.write().await.remove(&(guild.id, *user_id));
-        }
-
-        // Handle `member_voice` metric
-        for voice in guild.voice_states.values() {
-            if let Some(channel_id) = &voice.channel_id {
-                let (category_id, channel_id) = category_channel(&ctx, guild.id, *channel_id);
-                self.metrics_handler
-                    .member_voice
-                    .remove(&MemberVoiceLabels::new(
-                        guild.id,
-                        category_id,
-                        channel_id,
-                        voice,
-                    ));
-            }
-        }
+        self.metrics_handler.clear();
+        *created = false;
     }
 
     async fn guild_member_addition(&self, _ctx: Context, new_member: Member) {
@@ -309,14 +262,14 @@ impl EventHandler for Handler {
         // Handle `member` metric
         self.metrics_handler
             .member
-            .get_or_create(&MemberLabels::new(new_member.guild_id))
+            .get_or_create(&MemberLabels::new())
             .inc();
 
         // Handle `bot` metric
         if new_member.user.bot {
             self.metrics_handler
                 .bot
-                .get_or_create(&BotLabels::new(new_member.guild_id))
+                .get_or_create(&BotLabels::new())
                 .inc();
         }
     }
@@ -337,14 +290,14 @@ impl EventHandler for Handler {
         // Handle `member` metric
         self.metrics_handler
             .member
-            .get_or_create(&MemberLabels::new(guild_id))
+            .get_or_create(&MemberLabels::new())
             .dec();
 
         // Handle `bot` metric
         if user.bot {
             self.metrics_handler
                 .bot
-                .get_or_create(&BotLabels::new(guild_id))
+                .get_or_create(&BotLabels::new())
                 .dec();
         }
     }
@@ -367,7 +320,7 @@ impl EventHandler for Handler {
         // Handle `boost` metric
         self.metrics_handler
             .boost
-            .get_or_create(&BoostLabels::new(new_data.id))
+            .get_or_create(&BoostLabels::new())
             .set(
                 new_data
                     .premium_subscription_count
@@ -394,7 +347,7 @@ impl EventHandler for Handler {
         // Handle `message_sent` metric
         self.metrics_handler
             .message_sent
-            .get_or_create(&MessageSentLabels::new(guild_id, category_id, channel_id))
+            .get_or_create(&MessageSentLabels::new(category_id, channel_id))
             .inc();
 
         // Handle `emote_used` metric
@@ -407,7 +360,6 @@ impl EventHandler for Handler {
             self.metrics_handler
                 .emote_used
                 .get_or_create(&EmoteUsedLabels::new(
-                    guild_id,
                     category_id,
                     channel_id,
                     false,
@@ -443,7 +395,6 @@ impl EventHandler for Handler {
         self.metrics_handler
             .emote_used
             .get_or_create(&EmoteUsedLabels::new(
-                guild_id,
                 category_id,
                 channel_id,
                 true,
@@ -465,21 +416,18 @@ impl EventHandler for Handler {
         );
 
         // Decrement gauges for previous state if cached
-        if let Some(cached_user) = self.users.read().await.get(&(guild_id, new_data.user.id)) {
+        if let Some(cached_user) = self.users.read().await.get(&new_data.user.id) {
             // Handle `member_status` metric (decrement)
             self.metrics_handler
                 .member_status
-                .get_or_create(&MemberStatusLabels::new(
-                    guild_id,
-                    cached_user.presence.status,
-                ))
+                .get_or_create(&MemberStatusLabels::new(cached_user.presence.status))
                 .dec();
 
             // Handle `activity` metric (decrement)
             for activity in &cached_user.presence.activities {
                 self.metrics_handler
                     .activity
-                    .get_or_create(&ActivityLabels::new(guild_id, activity))
+                    .get_or_create(&ActivityLabels::new(activity))
                     .dec();
             }
         }
@@ -487,22 +435,22 @@ impl EventHandler for Handler {
         // Handle `member_status` metric
         self.metrics_handler
             .member_status
-            .get_or_create(&MemberStatusLabels::new(guild_id, new_data.status))
+            .get_or_create(&MemberStatusLabels::new(new_data.status))
             .inc();
 
         // Handle `activity` metric
         for activity in &new_data.activities {
             self.metrics_handler
                 .activity
-                .get_or_create(&ActivityLabels::new(guild_id, activity))
+                .get_or_create(&ActivityLabels::new(activity))
                 .inc();
         }
 
         // Update cached state
-        self.users.write().await.insert(
-            (guild_id, new_data.user.id),
-            CachedUser { presence: new_data },
-        );
+        self.users
+            .write()
+            .await
+            .insert(new_data.user.id, CachedUser { presence: new_data });
     }
 
     async fn voice_state_update(&self, ctx: Context, old: Option<VoiceState>, new: VoiceState) {
@@ -538,12 +486,7 @@ impl EventHandler for Handler {
             // Handle `member_voice` metric (decrement)
             self.metrics_handler
                 .member_voice
-                .get_or_create(&MemberVoiceLabels::new(
-                    guild_id,
-                    category_id,
-                    channel_id,
-                    &old,
-                ))
+                .get_or_create(&MemberVoiceLabels::new(category_id, channel_id, &old))
                 .dec();
         }
 
@@ -565,12 +508,7 @@ impl EventHandler for Handler {
             // Handle `member_voice` metric
             self.metrics_handler
                 .member_voice
-                .get_or_create(&MemberVoiceLabels::new(
-                    guild_id,
-                    category_id,
-                    channel_id,
-                    &new,
-                ))
+                .get_or_create(&MemberVoiceLabels::new(category_id, channel_id, &new))
                 .inc();
         }
     }
