@@ -131,6 +131,7 @@ impl EventHandler for Handler {
         if *created {
             error!("guild already created");
             self.metrics_handler.clear();
+            self.users.write().await.clear();
         }
         *created = true;
 
@@ -249,6 +250,7 @@ impl EventHandler for Handler {
             error!("guild not created");
         }
         self.metrics_handler.clear();
+        self.users.write().await.clear();
         *created = false;
     }
 
