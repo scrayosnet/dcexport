@@ -12,8 +12,8 @@ requirements.
 
 ## Metrics
 
-dcexport provides the following metrics. Every metric uses the label `guild_id` to differentiate the different guilds.
-For more detailed information about the metrics and their labels, see the [source code](./src/metrics.rs).
+dcexport provides the following metrics. It doesn't differentiate between guilds, as such it realistically only supports
+one. For more detailed information about the metrics and their labels, see the [source code](./src/metrics.rs).
 
 | Name          | Description                                                                               | Type    |
 |---------------|-------------------------------------------------------------------------------------------|---------|

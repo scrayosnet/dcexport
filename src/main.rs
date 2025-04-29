@@ -2,8 +2,8 @@ use clap::Parser;
 use std::fmt::{Display, Formatter};
 use std::net::SocketAddr;
 use std::str::FromStr;
-use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
+use tracing_subscriber::prelude::*;
 
 /// The default address (port) of the application metrics server.
 pub const DEFAULT_ADDRESS: &str = "0.0.0.0:10030";
