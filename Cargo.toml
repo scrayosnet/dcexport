@@ -16,7 +16,7 @@ edition = "2024"
 rust-version = "1.85.0"
 
 [dependencies]
-prometheus-client = { version = "0.23" }
+prometheus-client = { version = "0.24" }
 serenity = { version = "0.12" }
 tokio = { version = "1.44", features = ["macros", "rt-multi-thread", "signal"] }
 tokio-util = { version = "0.7", features = ["rt"] }
