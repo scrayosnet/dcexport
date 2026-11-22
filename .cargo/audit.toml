@@ -1,0 +1,14 @@
+[advisories]
+ignore = [
+    # chrono is unmaintained, but serenity still depends on it
+    "RUSTSEC-2026-0543",
+    # rustls 0.22 and rustls-webpki 0.102 are pinned by serenity 0.12 (tokio-tungstenite 0.21), and no
+    # serenity release moves past them yet
+    "RUSTSEC-2026-0346",
+    "RUSTSEC-2026-0349",
+    "RUSTSEC-2026-0049",
+    "RUSTSEC-2026-0098",
+    "RUSTSEC-2026-0099",
+    "RUSTSEC-2026-0104",
+    "RUSTSEC-2026-0382",
+]
