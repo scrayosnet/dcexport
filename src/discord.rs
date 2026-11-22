@@ -379,11 +379,11 @@ impl EventHandler for Handler {
         };
         info!(guild_id = guild_id.get(), "Reaction add");
 
-        if let Some(member) = &add_reaction.member {
-            if member.user.bot || member.user.system {
-                // Only tracks user messages
-                return;
-            }
+        if let Some(member) = &add_reaction.member
+            && (member.user.bot || member.user.system)
+        {
+            // Only tracks user messages
+            return;
         }
 
         let ReactionType::Custom { name, id, .. } = add_reaction.emoji else {

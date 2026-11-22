@@ -13,7 +13,7 @@ homepage = "https://github.com/scrayosnet/dcexport"
 keywords = ["discord", "prometheus", "monitoring", "exporter"]
 categories = ["development-tools", "command-line-utilities"]
 edition = "2024"
-rust-version = "1.85.0"
+rust-version = "1.88.0"
 
 [dependencies]
 prometheus-client = { version = "0.26" }
